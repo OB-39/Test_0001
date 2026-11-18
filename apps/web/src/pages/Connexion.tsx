@@ -44,8 +44,15 @@ export function Connexion() {
 
   const isMock = import.meta.env.VITE_USE_MOCK === 'true';
 
+  const requestedFrom = (
+    location.state as { from?: { pathname: string } } | null
+  )?.from?.pathname;
   const from =
-    (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/';
+    requestedFrom?.startsWith('/') &&
+    !requestedFrom.startsWith('//') &&
+    !requestedFrom.includes('\\')
+      ? requestedFrom
+      : '/';
 
   function update(champ: keyof EtatConnexion, valeur: string) {
     setForm((f) => ({ ...f, [champ]: valeur }));
