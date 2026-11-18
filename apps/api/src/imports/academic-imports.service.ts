@@ -16,6 +16,7 @@ export type TypeImportAcademique =
   | 'affectations'
   | 'inscriptions'
   | 'delegues'
+  | 'mandats-chefs-departement'
   | 'catalogue'
   | 'presences';
 
@@ -89,6 +90,7 @@ const COLONNES: Record<TypeImportAcademique, string[]> = {
     'debut',
     'fin',
   ],
+  'mandats-chefs-departement': ['campus', 'departement', 'matricule'],
 };
 
 const ANNEE = /^\d{4}-\d{4}$/;
@@ -608,6 +610,31 @@ export class AcademicImportsService {
       return;
     }
 
+    if (type === 'mandats-chefs-departement') {
+      this.obligatoire(row, ['campus', 'departement', 'matricule']);
+      const chef = await this.db.query<{ id: number }>(
+        `SELECT u.id
+         FROM identity.users u
+         JOIN identity.user_roles r
+           ON r.user_id = u.id AND r.role = 'chef_departement'
+         JOIN ref.department d ON d.id = r.department_id
+         JOIN ref.campus c ON c.id = d.campus_id
+         WHERE u.actif
+           AND LOWER(BTRIM(u.matricule)) = LOWER(BTRIM($1))
+           AND LOWER(BTRIM(c.nom)) = LOWER(BTRIM($2))
+           AND LOWER(BTRIM(d.nom)) = LOWER(BTRIM($3))
+           AND ($4::int IS NULL OR c.id = $4)
+         LIMIT 2`,
+        [row.matricule, row.campus, row.departement, campusId],
+      );
+      if (chef.length !== 1) {
+        throw new BadRequestException(
+          'Le compte doit être actif, avoir le rôle Chef de département et être rattaché au département indiqué',
+        );
+      }
+      return;
+    }
+
     if (type === 'catalogue') {
       this.obligatoire(row, [
         'code',
@@ -628,6 +655,21 @@ export class AcademicImportsService {
       ) {
         throw new BadRequestException(
           'Code, intitulé, crédits ou année universitaire invalides',
+        );
+      }
+      const compositeParents = await this.db.query<{ id: number }>(
+        `SELECT parent.id
+         FROM ref.ue parent
+         WHERE LOWER(BTRIM(parent.code)) = LOWER(BTRIM($1))
+           AND EXISTS (
+             SELECT 1 FROM ref.ue child
+             WHERE child.composite_parent_id = parent.id
+           )`,
+        [row.code],
+      );
+      if (compositeParents.length) {
+        throw new BadRequestException(
+          'Une UE composite ne peut pas être importée comme une offre de cours distincte',
         );
       }
       const semester = this.entier(row.semestre, 'semestre');
@@ -1051,6 +1093,32 @@ export class AcademicImportsService {
       );
       return { cree: rows[0].cree, modifie: !rows[0].cree };
     }
+    if (type === 'mandats-chefs-departement') {
+      const rows = await query<{ cree: boolean }>(
+        `INSERT INTO academic.department_heads (user_id, department_id)
+         SELECT u.id, d.id
+         FROM identity.users u
+         JOIN identity.user_roles r
+           ON r.user_id = u.id AND r.role = 'chef_departement'
+         JOIN ref.department d ON d.id = r.department_id
+         JOIN ref.campus c ON c.id = d.campus_id
+         WHERE u.actif
+           AND LOWER(BTRIM(u.matricule)) = LOWER(BTRIM($1))
+           AND LOWER(BTRIM(c.nom)) = LOWER(BTRIM($2))
+           AND LOWER(BTRIM(d.nom)) = LOWER(BTRIM($3))
+           AND ($4::int IS NULL OR c.id = $4)
+         ON CONFLICT (department_id)
+         DO UPDATE SET user_id = EXCLUDED.user_id
+         RETURNING (xmax = 0) AS cree`,
+        [row.matricule, row.campus, row.departement, campusId],
+      );
+      if (!rows[0]) {
+        throw new BadRequestException(
+          'Mandat non enregistré : compte, département ou périmètre modifié',
+        );
+      }
+      return { cree: rows[0].cree, modifie: !rows[0].cree };
+    }
     if (type === 'etudiants' || type === 'enseignants') {
       const role = type === 'etudiants' ? 'etudiant' : 'enseignant';
       const rows = await query<{ user_created: boolean }>(
@@ -1223,9 +1291,14 @@ export class AcademicImportsService {
     query: DatabaseQuery,
     code: string,
   ): Promise<number> {
-    const rows = await query<{ id: number }>(
-      `SELECT id FROM ref.ue
-       WHERE LOWER(BTRIM(code)) = LOWER(BTRIM($1))
+    const rows = await query<{ id: number; est_composite: boolean }>(
+      `SELECT u.id,
+              EXISTS (
+                SELECT 1 FROM ref.ue composante
+                WHERE composante.composite_parent_id = u.id
+              ) AS est_composite
+       FROM ref.ue u
+       WHERE LOWER(BTRIM(u.code)) = LOWER(BTRIM($1))
        LIMIT 2`,
       [code],
     );
@@ -1234,6 +1307,11 @@ export class AcademicImportsService {
         rows.length === 0
           ? `Code UE introuvable : ${code}`
           : `Code UE ambigu : ${code}`,
+      );
+    }
+    if (rows[0].est_composite) {
+      throw new BadRequestException(
+        'Une UE composite ne peut pas faire l’objet d’une offre de cours distincte',
       );
     }
     return rows[0].id;
@@ -1310,6 +1388,10 @@ export class AcademicImportsService {
       case 'etudiants':
       case 'enseignants':
         return `${type}:${row.matricule.toLowerCase()}`;
+      case 'mandats-chefs-departement':
+        return ['mandat-chef', row.campus, row.departement]
+          .map((part) => part.toLowerCase())
+          .join(':');
       case 'offres':
         return [
           'offre',

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, MessageSquare, Send, Stamp, BookOpen } from 'lucide-react';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import type { Seance } from '@/api/types';
 import { PageHeader, Button, Alert, Badge } from '@/components/ui';
 
@@ -27,6 +28,7 @@ function formaterDate(iso: string): string {
 }
 
 export function Visas() {
+  const { confirmer } = useConfirmation();
   const [seances, setSeances] = useState<Seance[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -54,6 +56,13 @@ export function Visas() {
   }, [charger]);
 
   async function viser(s: Seance) {
+    const confirme = await confirmer({
+      title: 'Approuver cette séance ?',
+      message: `Votre visa validera le contenu du cahier de texte pour « ${s.ueCode} » du ${s.date}. Cette décision sera enregistrée dans l’historique de la séance.`,
+      confirmLabel: 'Confirmer le visa',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnCours(s.id);
     setErreurAction(null);
     try {
@@ -69,6 +78,13 @@ export function Visas() {
 
   async function viserToutes() {
     if (seances.length === 0) return;
+    const confirme = await confirmer({
+      title: 'Approuver toutes les séances ?',
+      message: `${seances.length} séance(s) en attente recevront un visa. Chaque validation sera enregistrée dans l’historique et pourra être consultée dans le cahier de texte.`,
+      confirmLabel: `Viser ${seances.length} séance(s)`,
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnCours('tous');
     setErreurAction(null);
     try {
@@ -90,6 +106,13 @@ export function Visas() {
       setErreurAction('Un commentaire est obligatoire pour contester.');
       return;
     }
+    const confirme = await confirmer({
+      title: 'Contester cette séance ?',
+      message: `Votre commentaire sera enregistré comme réserve à propos de la séance « ${s.ueCode} » du ${s.date} et sera visible dans son historique.`,
+      confirmLabel: 'Enregistrer la contestation',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnCours(s.id);
     setErreurAction(null);
     try {

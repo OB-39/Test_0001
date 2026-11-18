@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import type { Campagne, Synthese, SuitesDonnees, LigneSynthese } from '@/api/types';
 import {
   PageHeader,
@@ -32,6 +33,7 @@ function fmtMoy(v: number | null): string {
 }
 
 export function SynthesePage() {
+  const { confirmer } = useConfirmation();
   const [campagnes, setCampagnes] = useState<Campagne[]>([]);
   const [campagneId, setCampagneId] = useState<number | null>(null);
   const [synthese, setSynthese] = useState<Synthese | null>(null);
@@ -91,6 +93,13 @@ export function SynthesePage() {
 
   async function enregistrerSuites() {
     if (campagneId === null) return;
+    const confirme = await confirmer({
+      title: 'Enregistrer le plan d’action ?',
+      message: 'Les suites saisies seront enregistrées comme plan d’amélioration du département pour cette campagne. Les utilisateurs autorisés à consulter la synthèse pourront les voir.',
+      confirmLabel: 'Enregistrer le plan',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnCours(true);
     setErreurSave(null);
     setSaveOk(false);

@@ -8,7 +8,6 @@ import { DatabaseService } from '../database/database.service';
 import { DUREE_VERROUILLAGE_MINUTES, MAX_ECHECS } from './users.constants';
 import { AuditService } from '../audit/audit.service';
 
-
 export interface Utilisateur {
   id: number;
   matricule: string | null;
@@ -30,6 +29,8 @@ export interface CompteAdmin {
   actif: boolean;
   motDePasseConfigure: boolean;
   roles: string[];
+  dansPerimetre: boolean;
+  peutSupprimer: boolean;
 }
 
 const COLONNES = `id, matricule, email, nom, prenom, mot_de_passe_hash, actif,
@@ -42,7 +43,9 @@ export class UsersService {
     private readonly audit: AuditService,
   ) {}
 
-  async trouverParIdentifiant(identifiant: string): Promise<Utilisateur | null> {
+  async trouverParIdentifiant(
+    identifiant: string,
+  ): Promise<Utilisateur | null> {
     const rows = await this.db.query<Utilisateur>(
       `SELECT ${COLONNES}
        FROM identity.users
@@ -72,16 +75,48 @@ export class UsersService {
     return rows.map((r) => r.role);
   }
 
-  async listerComptes(campusId: number | null = null): Promise<CompteAdmin[]> {
+  async listerComptes(
+    campusId: number | null = null,
+    inclureHorsPerimetre = false,
+  ): Promise<CompteAdmin[]> {
     return this.db.query<CompteAdmin>(
       `SELECT u.id, u.matricule, u.email, u.nom, u.prenom, u.actif,
               (u.mot_de_passe_hash IS NOT NULL) AS "motDePasseConfigure",
+              ($1::int IS NULL OR EXISTS (
+                SELECT 1 FROM identity.user_roles perimetre
+                WHERE perimetre.user_id = u.id
+                  AND (perimetre.campus_id = $1 OR perimetre.department_id IN (
+                    SELECT d.id FROM ref.department d WHERE d.campus_id = $1
+                  ))
+              )) AS "dansPerimetre",
+              ($1::int IS NULL OR (
+                EXISTS (
+                  SELECT 1 FROM identity.user_roles perimetre
+                  WHERE perimetre.user_id = u.id
+                    AND (perimetre.campus_id = $1 OR perimetre.department_id IN (
+                      SELECT d.id FROM ref.department d WHERE d.campus_id = $1
+                    ))
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM identity.user_roles perimetre
+                  WHERE perimetre.user_id = u.id
+                    AND (
+                      perimetre.role NOT IN ('etudiant', 'delegue', 'enseignant')
+                      OR NOT COALESCE(
+                        perimetre.campus_id = $1 OR perimetre.department_id IN (
+                          SELECT d.id FROM ref.department d WHERE d.campus_id = $1
+                        ),
+                        FALSE
+                      )
+                    )
+                )
+              )) AS "peutSupprimer",
               COALESCE(array_agg(r.role ORDER BY r.role)
                 FILTER (WHERE r.role IS NOT NULL), ARRAY[]::varchar[]) AS roles
        FROM identity.users u
        LEFT JOIN identity.user_roles r ON r.user_id = u.id
        WHERE u.deleted_at IS NULL
-         AND ($1::int IS NULL OR EXISTS (
+         AND ($2::boolean OR $1::int IS NULL OR EXISTS (
          SELECT 1 FROM identity.user_roles perimetre
          WHERE perimetre.user_id = u.id
            AND (perimetre.campus_id = $1 OR perimetre.department_id IN (
@@ -90,7 +125,7 @@ export class UsersService {
        ))
        GROUP BY u.id
        ORDER BY u.nom, u.prenom, u.id`,
-      [campusId],
+      [campusId, inclureHorsPerimetre],
     );
   }
 
@@ -101,7 +136,9 @@ export class UsersService {
     campusId: number | null,
   ): Promise<void> {
     if (userId === actorId) {
-      throw new ConflictException('Vous ne pouvez pas supprimer votre propre compte');
+      throw new ConflictException(
+        'Vous ne pouvez pas supprimer votre propre compte',
+      );
     }
 
     await this.db.transaction(async (query) => {
@@ -153,7 +190,9 @@ export class UsersService {
           [userId, campusId],
         );
         if (!perimetres[0]?.autorise) {
-          throw new NotFoundException('Compte introuvable dans votre périmètre');
+          throw new NotFoundException(
+            'Compte introuvable dans votre périmètre',
+          );
         }
       } else if (activeRole === 'admin' && roles.includes('admin')) {
         const administrateurs = await query<{ id: number }>(
@@ -197,11 +236,14 @@ export class UsersService {
       await query('DELETE FROM identity.mfa_challenges WHERE user_id = $1', [
         userId,
       ]);
-      await query('DELETE FROM identity.mfa_trusted_devices WHERE user_id = $1', [
+      await query(
+        'DELETE FROM identity.mfa_trusted_devices WHERE user_id = $1',
+        [userId],
+      );
+      await query('DELETE FROM identity.user_mfa WHERE user_id = $1', [userId]);
+      await query('DELETE FROM identity.user_roles WHERE user_id = $1', [
         userId,
       ]);
-      await query('DELETE FROM identity.user_mfa WHERE user_id = $1', [userId]);
-      await query('DELETE FROM identity.user_roles WHERE user_id = $1', [userId]);
       await query(
         'DELETE FROM identity.email_change_requests WHERE user_id = $1',
         [userId],
@@ -218,7 +260,8 @@ export class UsersService {
       await this.audit.enregistrerDans(query, {
         userId: actorId,
         action: 'suppression_compte',
-        campusId: activeRole === 'scolarite' ? campusId ?? undefined : undefined,
+        campusId:
+          activeRole === 'scolarite' ? (campusId ?? undefined) : undefined,
         objet: `compte:${userId}`,
         detail: `Suppression logique; rôles: ${roles.join(', ') || 'aucun'}`,
       });

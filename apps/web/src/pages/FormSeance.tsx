@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Clock, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import type {
   SeanceEntree,
   TypeSeance,
@@ -38,6 +39,7 @@ function aujourdISO(): string {
 }
 
 export function FormSeance() {
+  const { confirmer } = useConfirmation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const modeModification = Boolean(id);
@@ -142,6 +144,15 @@ export function FormSeance() {
     if (errs.length > 0) {
       setErreurs(errs);
       return;
+    }
+    if (modeModification) {
+      const confirme = await confirmer({
+        title: 'Confirmer la modification de la séance',
+        message: 'Les modifications remplaceront les informations actuellement enregistrées dans le cahier de texte et seront visibles aux utilisateurs autorisés.',
+        confirmLabel: 'Enregistrer les modifications',
+        variant: 'warning',
+      });
+      if (!confirme) return;
     }
     setEnCours(true);
     setErreurGlobal(null);

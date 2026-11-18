@@ -23,6 +23,8 @@ import type {
   CampagneCommentaire,
   CampagneEntreeGestion,
   DepartementOption,
+  ProgrammeScolarite,
+  UniteEnseignementScolarite,
   ResultatCodes,
   CommentaireAModerer,
   TableauDeBordScolarite,
@@ -754,6 +756,77 @@ export async function scolariteCloturerCampagne(
 
 export async function scolariteDepartements(): Promise<DepartementOption[]> {
   return requete<DepartementOption[]>("/referentiels/departements");
+}
+
+export async function scolariteProgrammes(): Promise<ProgrammeScolarite[]> {
+  return requete<ProgrammeScolarite[]>("/referentiels/programmes");
+}
+
+export async function scolariteCreerProgramme(
+  departmentId: number,
+  nom: string,
+): Promise<ProgrammeScolarite> {
+  return requete<ProgrammeScolarite>("/referentiels/programmes", {
+    method: "POST",
+    body: { departmentId, nom },
+  });
+}
+
+export async function scolariteModifierProgramme(
+  id: number,
+  modifications: { departmentId?: number; nom?: string },
+): Promise<ProgrammeScolarite> {
+  return requete<ProgrammeScolarite>(`/referentiels/programmes/${id}`, {
+    method: "PATCH",
+    body: modifications,
+  });
+}
+
+export async function scolariteSupprimerProgramme(
+  id: number,
+): Promise<ReponseSimple> {
+  return requete<ReponseSimple>(`/referentiels/programmes/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function scolariteUnitesEnseignement(): Promise<UniteEnseignementScolarite[]> {
+  return requete<UniteEnseignementScolarite[]>("/referentiels/unites-enseignement");
+}
+
+export async function scolariteCreerUniteEnseignement(entree: {
+  code: string;
+  intitule: string;
+  credits: number;
+  composantesIds?: number[];
+}): Promise<UniteEnseignementScolarite> {
+  return requete<UniteEnseignementScolarite>("/referentiels/unites-enseignement", {
+    method: "POST",
+    body: entree,
+  });
+}
+
+export async function scolariteModifierUniteEnseignement(
+  id: number,
+  entree: {
+    code: string;
+    intitule: string;
+    credits: number;
+    composantesIds?: number[];
+  },
+): Promise<UniteEnseignementScolarite> {
+  return requete<UniteEnseignementScolarite>(`/referentiels/unites-enseignement/${id}`, {
+    method: "PATCH",
+    body: entree,
+  });
+}
+
+export async function scolariteSupprimerUniteEnseignement(
+  id: number,
+): Promise<ReponseSimple> {
+  return requete<ReponseSimple>(`/referentiels/unites-enseignement/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export async function scolariteComptes(): Promise<CompteAdministration[]> {

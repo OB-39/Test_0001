@@ -169,6 +169,13 @@ export const ENTREES_MENU: EntreeMenu[] = [
     roles: ["scolarite", "admin"],
     section: (r: Role) => (r === "admin" ? "Administration Système" : "Gestion Scolarité"),
   },
+  {
+    chemin: "/scolarite/programmes",
+    libelle: "Programmes et UE",
+    icone: "BookOpen",
+    roles: ["scolarite"],
+    section: "Gestion Scolarité",
+  },
 
   // --- 6. DIRECTION (CAMPUS & GÉNÉRALE) ---
   {

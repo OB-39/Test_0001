@@ -24,6 +24,7 @@ import {
   Legend,
 } from 'recharts';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import { useAuth } from '@/auth/AuthContext';
 import type {
   ControlesAcademiques,
@@ -52,6 +53,7 @@ const ANNEE_DEFAUT = `${DEBUT_ANNEE_ACADEMIQUE}-${DEBUT_ANNEE_ACADEMIQUE + 1}`;
 const SEMESTRE_DEFAUT = 1;
 
 export function DirectionStatistiques() {
+  const { confirmer } = useConfirmation();
   const location = useLocation();
   const { aRole } = useAuth();
   const directeurGeneral = aRole('directeur_general');
@@ -98,6 +100,13 @@ export function DirectionStatistiques() {
   }, [charger]);
 
   async function publier() {
+    const confirme = await confirmer({
+      title: 'Publier les statistiques globales ?',
+      message: `La publication officielle pour ${anneeUniversitaire}, semestre ${semestre}, actualisera les statistiques visibles et les restitutions concernées. Vérifiez la période avant de continuer.`,
+      confirmLabel: 'Publier les statistiques',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setPublicationEnCours(true);
     setErreur(null);
     setConfirmation(null);

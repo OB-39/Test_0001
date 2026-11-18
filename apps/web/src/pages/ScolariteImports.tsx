@@ -10,6 +10,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import type {
   ResultatImportUtilisateurs,
   ResultatImport,
@@ -52,6 +53,11 @@ const MODELES_ACADEMIQUES: Record<TypeImport, { label: string; colonnes: string;
     colonnes: 'campus, departement, programme, matricule, anneeUniversitaire, type, debut, fin',
     csv: 'campus,departement,programme,matricule,anneeUniversitaire,type,debut,fin\nENP-CL,CPI,Cycle Préparatoire,TEST-0002,2026-2027,titulaire,2026-09-01,2027-06-30\n',
   },
+  'mandats-chefs-departement': {
+    label: 'Mandat des chefs de département',
+    colonnes: 'campus, departement, matricule',
+    csv: 'campus,departement,matricule\nENP-CL,CPI,TEST-CD-001\n',
+  },
   etudiants: {
     label: 'Référentiel étudiants',
     colonnes: 'matricule, email, nom, prenom',
@@ -75,6 +81,7 @@ const MODELES_ACADEMIQUES: Record<TypeImport, { label: string; colonnes: string;
 };
 
 export function ScolariteImports() {
+  const { confirmer } = useConfirmation();
   const [categorie, setCategorie] = useState<'comptes' | 'academique'>('comptes');
   const [typeAcademique, setTypeAcademique] = useState<TypeImport>('ue');
   const [fichier, setFichier] = useState<File | null>(null);
@@ -198,6 +205,13 @@ export function ScolariteImports() {
 
   async function appliquerImport() {
     if (!rapport) return;
+    const confirme = await confirmer({
+      title: 'Appliquer cet import ?',
+      message: `Les ${rapport.lignesValides} ligne(s) validées sur ${rapport.lignesTotal} seront écrites dans les données académiques. Cette opération peut modifier plusieurs comptes, cours, inscriptions ou présences.`,
+      confirmLabel: 'Appliquer les modifications',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnCours(true);
     setErreur(null);
     try {

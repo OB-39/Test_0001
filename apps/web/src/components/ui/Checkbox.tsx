@@ -14,7 +14,12 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
 
     return (
       <div className={`flex items-start gap-2.5 ${className}`}>
-        <div className="relative flex items-center h-5 mt-0.5">
+        <label
+          htmlFor={checkboxId}
+          className={`relative flex items-center h-5 mt-0.5 ${
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer'
+          }`}
+        >
           <input
             ref={ref}
             id={checkboxId}
@@ -25,7 +30,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             {...props}
           />
           <div
-            className={`w-4 h-4 border transition-colors flex items-center justify-center cursor-pointer select-none ${
+            aria-hidden="true"
+            className={`w-4 h-4 border transition-colors flex items-center justify-center pointer-events-none select-none peer-focus-visible:ring-2 peer-focus-visible:ring-enp-blue-primary peer-focus-visible:ring-offset-2 ${
               checked
                 ? 'bg-enp-blue-primary border-enp-blue-primary text-white'
                 : 'bg-white border-enp-border hover:border-enp-blue-primary'
@@ -35,13 +41,15 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           >
             {checked && <Check className="w-3.5 h-3.5 stroke-[3]" aria-hidden="true" />}
           </div>
-        </div>
+        </label>
         {(label || description) && (
           <div className="text-sm select-none">
             {label && (
               <label
                 htmlFor={checkboxId}
-                className={`font-medium text-enp-black cursor-pointer ${
+                className={`font-medium text-enp-black ${
+                  disabled ? 'cursor-not-allowed' : 'cursor-pointer'
+                } ${
                   disabled ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >

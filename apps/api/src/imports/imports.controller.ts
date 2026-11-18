@@ -36,6 +36,7 @@ const TYPES_IMPORT: TypeImportAcademique[] = [
   'affectations',
   'inscriptions',
   'delegues',
+  'mandats-chefs-departement',
   'catalogue',
   'presences',
 ];

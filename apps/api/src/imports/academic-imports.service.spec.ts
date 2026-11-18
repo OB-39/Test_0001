@@ -114,6 +114,88 @@ describe('AcademicImportsService', () => {
     expect(report.erreurs[0].message).toContain('inscrit dans un cours');
   });
 
+  it('valide et applique un mandat de chef de département par upsert', async () => {
+    query
+      .mockResolvedValueOnce([{ id: 3 }])
+      .mockResolvedValueOnce([{ id: 'staging-id' }]);
+
+    const report = await service.verifier(
+      'mandats-chefs-departement',
+      Buffer.from(
+        'campus,departement,matricule\nCampus Nord,Informatique,CD-001\n',
+      ),
+      9,
+      4,
+    );
+    expect(report).toMatchObject({
+      lignesTotal: 1,
+      lignesValides: 1,
+      erreurs: [],
+    });
+    expect(query.mock.calls[0][0]).toContain("r.role = 'chef_departement'");
+
+    query
+      .mockResolvedValueOnce([
+        {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          campus_id: 4,
+          valid_rows: [
+            {
+              campus: 'Campus Nord',
+              departement: 'Informatique',
+              matricule: 'CD-001',
+            },
+          ],
+          errors: [],
+          lignes_total: 1,
+          statut: 'en_attente',
+          resultat: null,
+          expire_le: new Date(Date.now() + 60_000),
+        },
+      ])
+      .mockResolvedValueOnce([{ cree: false }])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      service.valider(
+        'mandats-chefs-departement',
+        '123e4567-e89b-12d3-a456-426614174000',
+        9,
+        4,
+      ),
+    ).resolves.toEqual({ crees: 0, misAJour: 1 });
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('ON CONFLICT (department_id)'),
+      ),
+    ).toBe(true);
+  });
+
+  it('refuse une offre de cours pour une UE composite', async () => {
+    query
+      .mockResolvedValueOnce([{ id: 12, est_composite: true }])
+      .mockResolvedValueOnce([{ id: 'staging-id' }]);
+
+    const report = await service.verifier(
+      'offres',
+      Buffer.from(
+        'ueCode,campus,departement,programme,anneeUniversitaire,semestre\nPHY1120,Campus Nord,Physique,Licence,2026-2027,1\n',
+      ),
+      9,
+      4,
+    );
+
+    expect(report).toMatchObject({
+      lignesTotal: 1,
+      lignesValides: 0,
+      erreurs: [
+        {
+          message: expect.stringContaining('UE composite'),
+        },
+      ],
+    });
+  });
+
   it('lit le catalogue XLSX, conserve ses métadonnées et signale les enseignants non rapprochés', async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Format 2');

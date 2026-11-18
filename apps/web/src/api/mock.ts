@@ -25,6 +25,8 @@ import type {
   CampagneCommentaire,
   CampagneEntreeGestion,
   DepartementOption,
+  ProgrammeScolarite,
+  UniteEnseignementScolarite,
   ResultatCodes,
   CodeActivationGenere,
   CommentaireAModerer,
@@ -396,6 +398,8 @@ const QUESTIONNAIRE: Questionnaire = {
 
 const jetonsUtilises: Set<string> = new Set();
 const jetonsEmis: Map<number, string> = new Map(); // ueId → jeton
+const codesReinitialisation: Map<number, { code: string; expireLe: number }> =
+  new Map();
 
 /* ------------------------------------------------------------------ */
 /*  Utilitaires                                                        */
@@ -557,13 +561,45 @@ export async function verifierMfa(_corps?: {
   });
 }
 
-export async function demanderReinitialisation(): Promise<ReponseSimple> {
+export async function demanderReinitialisation(
+  identifiant: string,
+): Promise<ReponseSimple> {
   await delai();
+  const compte = trouverCompte(identifiant);
+  if (compte) {
+    codesReinitialisation.set(compte.id, {
+      code: "123456",
+      expireLe: Date.now() + 30 * 60 * 1000,
+    });
+  }
   return { ok: true };
 }
 
-export async function confirmerReinitialisation(): Promise<ReponseSimple> {
+export async function confirmerReinitialisation(corps: {
+  identifiant: string;
+  code: string;
+  motDePasse: string;
+}): Promise<ReponseSimple> {
   await delai();
+  const compte = trouverCompte(corps.identifiant);
+  const demande = compte ? codesReinitialisation.get(compte.id) : undefined;
+  if (
+    !compte ||
+    !demande ||
+    demande.expireLe <= Date.now() ||
+    demande.code !== corps.code ||
+    corps.motDePasse.length < 12 ||
+    corps.motDePasse.length > 200
+  ) {
+    throw new ApiError({
+      message: "Identifiant ou code de réinitialisation invalide ou expiré.",
+      statusCode: 400,
+    });
+  }
+  compte.motDePasse = corps.motDePasse;
+  compte.altMotDePasse = undefined;
+  codesReinitialisation.delete(compte.id);
+  if (sessionMemoire?.utilisateur.id === compte.id) sessionMemoire = null;
   return { ok: true };
 }
 
@@ -593,7 +629,10 @@ export async function demanderChangementEmail(corps: {
   }
   const email = corps.nouvelleAdresse.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new ApiError({ message: "Adresse e-mail invalide.", statusCode: 400 });
+    throw new ApiError({
+      message: "Adresse e-mail invalide.",
+      statusCode: 400,
+    });
   }
   adresseEmailEnAttente = { userId: compte.id, email };
   return { ok: true };
@@ -2448,6 +2487,45 @@ let referentielsAdministration: ReferentielsAdministration = {
   ],
 };
 
+let unitesScolarite: UniteEnseignementScolarite[] = [
+  {
+    id: 401,
+    code: "INF501",
+    intitule: "Algorithmique avancée",
+    credits: 5,
+    modifiable: true,
+    compositeParentId: null,
+    composantes: [],
+    programmes: [
+      { id: 1, nom: "Cycle Préparatoire", departement: "Informatique" },
+    ],
+  },
+  {
+    id: 402,
+    code: "MAT502",
+    intitule: "Probabilités et statistiques",
+    credits: 4,
+    modifiable: true,
+    compositeParentId: null,
+    composantes: [],
+    programmes: [
+      { id: 1, nom: "Cycle Préparatoire", departement: "Informatique" },
+    ],
+  },
+  {
+    id: 403,
+    code: "INF503",
+    intitule: "Bases de données",
+    credits: 4,
+    modifiable: true,
+    compositeParentId: null,
+    composantes: [],
+    programmes: [
+      { id: 2, nom: "Cycle Ingénieur", departement: "Électronique" },
+    ],
+  },
+];
+
 const COMPTES_SANS_MDP = [
   { identifiant: "ETU2026-001", nom: "Amrani", prenom: "Sofiane" },
   { identifiant: "ETU2026-002", nom: "Belkacem", prenom: "Yasmine" },
@@ -2573,16 +2651,20 @@ const EN_TETES_IMPORT: Record<TypeImport, string[][]> = {
     ["matricule", "email", "nom", "prenom"],
     ["email", "nom", "prenom"],
   ],
-  ue: [
-    ["code", "intitule", "credits"],
-  ],
+  ue: [["code", "intitule", "credits"]],
   offres: [
     ["uecode", "programid", "anneeuniversitaire", "semestre"],
     ["code_ue", "programme", "annee_universitaire", "semestre"],
   ],
   affectations: [
     ["courseid", "matricule"],
-    ["code_ue", "programme", "annee_universitaire", "semestre", "email_enseignant"],
+    [
+      "code_ue",
+      "programme",
+      "annee_universitaire",
+      "semestre",
+      "email_enseignant",
+    ],
   ],
   inscriptions: [
     ["courseid", "matricule"],
@@ -2592,6 +2674,7 @@ const EN_TETES_IMPORT: Record<TypeImport, string[][]> = {
     ["programid", "matricule", "anneeuniversitaire", "type", "debut", "fin"],
     ["matricule", "programme", "annee_universitaire"],
   ],
+  "mandats-chefs-departement": [["campus", "departement", "matricule"]],
   catalogue: [],
   presences: [],
 };
@@ -2735,6 +2818,245 @@ export async function scolariteDepartements(): Promise<DepartementOption[]> {
   return DEPARTEMENTS.map((d) => ({ ...d }));
 }
 
+export async function scolariteProgrammes(): Promise<ProgrammeScolarite[]> {
+  await delai();
+  return referentielsAdministration.programmes.map((programme) => {
+    const departement = referentielsAdministration.departements.find(
+      (ligne) => ligne.id === programme.departmentId,
+    );
+    return {
+      ...programme,
+      campus: departement?.campus ?? "",
+    };
+  });
+}
+
+export async function scolariteCreerProgramme(
+  departmentId: number,
+  nom: string,
+): Promise<ProgrammeScolarite> {
+  await delai();
+  const department = referentielsAdministration.departements.find(
+    (ligne) => ligne.id === departmentId,
+  );
+  if (!department) {
+    throw new ApiError({
+      message: "Département introuvable.",
+      statusCode: 404,
+    });
+  }
+  if (
+    referentielsAdministration.programmes.some(
+      (ligne) =>
+        ligne.departmentId === departmentId &&
+        ligne.nom.toLowerCase() === nom.trim().toLowerCase(),
+    )
+  ) {
+    throw new ApiError({
+      message: "Ce programme existe déjà dans ce département.",
+      statusCode: 409,
+    });
+  }
+  const programme: ProgrammeScolarite = {
+    id: Date.now(),
+    nom: nom.trim(),
+    departmentId,
+    departement: department.nom,
+    campus: department.campus,
+  };
+  referentielsAdministration = {
+    ...referentielsAdministration,
+    programmes: [...referentielsAdministration.programmes, programme],
+  };
+  return programme;
+}
+
+export async function scolariteModifierProgramme(
+  id: number,
+  modifications: { departmentId?: number; nom?: string },
+): Promise<ProgrammeScolarite> {
+  await delai();
+  const existing = referentielsAdministration.programmes.find(
+    (ligne) => ligne.id === id,
+  );
+  if (!existing) {
+    throw new ApiError({ message: "Programme introuvable.", statusCode: 404 });
+  }
+  const departmentId = modifications.departmentId ?? existing.departmentId;
+  const department = referentielsAdministration.departements.find(
+    (ligne) => ligne.id === departmentId,
+  );
+  if (!department) {
+    throw new ApiError({
+      message: "Département introuvable.",
+      statusCode: 404,
+    });
+  }
+  const nom = modifications.nom?.trim() ?? existing.nom;
+  if (
+    referentielsAdministration.programmes.some(
+      (ligne) =>
+        ligne.id !== id &&
+        ligne.departmentId === departmentId &&
+        ligne.nom.toLowerCase() === nom.toLowerCase(),
+    )
+  ) {
+    throw new ApiError({
+      message: "Ce programme existe déjà dans ce département.",
+      statusCode: 409,
+    });
+  }
+  const updated: ProgrammeScolarite = {
+    id,
+    nom,
+    departmentId,
+    departement: department.nom,
+    campus: department.campus,
+  };
+  referentielsAdministration = {
+    ...referentielsAdministration,
+    programmes: referentielsAdministration.programmes.map((ligne) =>
+      ligne.id === id ? updated : ligne,
+    ),
+  };
+  return updated;
+}
+
+export async function scolariteSupprimerProgramme(
+  id: number,
+): Promise<ReponseSimple> {
+  await delai();
+  if (!referentielsAdministration.programmes.some((ligne) => ligne.id === id)) {
+    throw new ApiError({ message: "Programme introuvable.", statusCode: 404 });
+  }
+  referentielsAdministration = {
+    ...referentielsAdministration,
+    programmes: referentielsAdministration.programmes.filter(
+      (ligne) => ligne.id !== id,
+    ),
+  };
+  return { ok: true };
+}
+
+export async function scolariteUnitesEnseignement(): Promise<
+  UniteEnseignementScolarite[]
+> {
+  await delai();
+  return unitesScolarite.map((ligne) => ({ ...ligne }));
+}
+
+export async function scolariteCreerUniteEnseignement(entree: {
+  code: string;
+  intitule: string;
+  credits: number;
+  composantesIds?: number[];
+}): Promise<UniteEnseignementScolarite> {
+  await delai();
+  if (
+    unitesScolarite.some(
+      (ligne) => ligne.code.toLowerCase() === entree.code.trim().toLowerCase(),
+    )
+  ) {
+    throw new ApiError({ message: "Ce code UE existe déjà.", statusCode: 409 });
+  }
+  const unite: UniteEnseignementScolarite = {
+    id: Date.now(),
+    ...entree,
+    code: entree.code.trim(),
+    intitule: entree.intitule.trim(),
+    modifiable: true,
+    compositeParentId: null,
+    composantes: (entree.composantesIds ?? [])
+      .map((composanteId) =>
+        unitesScolarite.find((ligne) => ligne.id === composanteId),
+      )
+      .filter((ligne): ligne is UniteEnseignementScolarite => Boolean(ligne))
+      .map(({ id: composanteId, code, intitule, credits }) => ({
+        id: composanteId,
+        code,
+        intitule,
+        credits,
+      })),
+    programmes: [],
+  };
+  unitesScolarite = unitesScolarite.map((ligne) =>
+    entree.composantesIds?.includes(ligne.id)
+      ? { ...ligne, compositeParentId: unite.id }
+      : ligne,
+  );
+  unitesScolarite = [...unitesScolarite, unite];
+  return { ...unite };
+}
+
+export async function scolariteModifierUniteEnseignement(
+  id: number,
+  entree: {
+    code: string;
+    intitule: string;
+    credits: number;
+    composantesIds?: number[];
+  },
+): Promise<UniteEnseignementScolarite> {
+  await delai();
+  if (!unitesScolarite.some((ligne) => ligne.id === id)) {
+    throw new ApiError({ message: "UE introuvable.", statusCode: 404 });
+  }
+  if (
+    unitesScolarite.some(
+      (ligne) =>
+        ligne.id !== id &&
+        ligne.code.toLowerCase() === entree.code.trim().toLowerCase(),
+    )
+  ) {
+    throw new ApiError({ message: "Ce code UE existe déjà.", statusCode: 409 });
+  }
+  const updated: UniteEnseignementScolarite = {
+    id,
+    ...entree,
+    code: entree.code.trim(),
+    intitule: entree.intitule.trim(),
+    modifiable: true,
+    compositeParentId:
+      unitesScolarite.find((ligne) => ligne.id === id)?.compositeParentId ??
+      null,
+    composantes: (entree.composantesIds ?? [])
+      .map((composanteId) =>
+        unitesScolarite.find((ligne) => ligne.id === composanteId),
+      )
+      .filter((ligne): ligne is UniteEnseignementScolarite => Boolean(ligne))
+      .map(({ id: composanteId, code, intitule, credits }) => ({
+        id: composanteId,
+        code,
+        intitule,
+        credits,
+      })),
+    programmes:
+      unitesScolarite.find((ligne) => ligne.id === id)?.programmes ?? [],
+  };
+  unitesScolarite = unitesScolarite.map((ligne) =>
+    entree.composantesIds?.includes(ligne.id)
+      ? { ...ligne, compositeParentId: id }
+      : ligne.compositeParentId === id
+        ? { ...ligne, compositeParentId: null }
+        : ligne,
+  );
+  unitesScolarite = unitesScolarite.map((ligne) =>
+    ligne.id === id ? updated : ligne,
+  );
+  return { ...updated };
+}
+
+export async function scolariteSupprimerUniteEnseignement(
+  id: number,
+): Promise<ReponseSimple> {
+  await delai();
+  if (!unitesScolarite.some((ligne) => ligne.id === id)) {
+    throw new ApiError({ message: "UE introuvable.", statusCode: 404 });
+  }
+  unitesScolarite = unitesScolarite.filter((ligne) => ligne.id !== id);
+  return { ok: true };
+}
+
 export async function scolariteComptes(): Promise<CompteAdministration[]> {
   await delai();
   return COMPTES.map((compte) => ({
@@ -2746,10 +3068,14 @@ export async function scolariteComptes(): Promise<CompteAdministration[]> {
     actif: true,
     motDePasseConfigure: true,
     roles: compte.roles as Role[],
+    dansPerimetre: true,
+    peutSupprimer: true,
   }));
 }
 
-export async function scolariteSupprimerCompte(id: number): Promise<ReponseSimple> {
+export async function scolariteSupprimerCompte(
+  id: number,
+): Promise<ReponseSimple> {
   await delai();
   const index = COMPTES.findIndex((compte) => compte.id === id);
   if (index < 0) {
@@ -2772,11 +3098,14 @@ export async function scolariteImporterUtilisateurs(
     .split(/\r?\n/)
     .filter((ligne) => ligne.trim());
   const entetesAttendus = ["matricule", "email", "nom", "prenom", "role"];
-  const h = lignes[0]
-    ?.replace(/^\uFEFF/, "")
-    .split(",")
-    .map((x) => x.trim().toLowerCase()) ?? [];
-  const entetesValides = entetesAttendus.every((champ, idx) => h[idx] === champ);
+  const h =
+    lignes[0]
+      ?.replace(/^\uFEFF/, "")
+      .split(",")
+      .map((x) => x.trim().toLowerCase()) ?? [];
+  const entetesValides = entetesAttendus.every(
+    (champ, idx) => h[idx] === champ,
+  );
   if (!entetesValides) {
     throw new ApiError({
       message: `En-têtes CSV invalides. Attendus : ${entetesAttendus.join(", ")} (avec éventuellement campusId et departmentId)`,
@@ -2983,11 +3312,18 @@ export async function scolariteVerifierImport(
   let lignesValides = 0;
 
   // Recherche d'un ensemble d'en-têtes valide
-  const attendues = setsAttendus.find(
-    (ens) => ens.map((x) => x.toLowerCase()).join(",") === enTetes.join(","),
-  ) ?? setsAttendus[0] ?? [];
+  const attendues =
+    setsAttendus.find(
+      (ens) => ens.map((x) => x.toLowerCase()).join(",") === enTetes.join(","),
+    ) ??
+    setsAttendus[0] ??
+    [];
 
-  if (setsAttendus.every((ens) => ens.map((x) => x.toLowerCase()).join(",") !== enTetes.join(","))) {
+  if (
+    setsAttendus.every(
+      (ens) => ens.map((x) => x.toLowerCase()).join(",") !== enTetes.join(","),
+    )
+  ) {
     erreurs.push({
       ligne: 1,
       message: `En-têtes incorrects. Format attendu : ${attendues.join(", ")}`,
@@ -3109,7 +3445,13 @@ export async function moderationCampagnes(): Promise<CampagneCommentaire[]> {
   await delai();
   return campagnesGestionMemoire.flatMap((campagne) =>
     campagne.statut === "close" || campagne.statut === "restituee"
-      ? [{ id: campagne.id, libelle: campagne.libelle, statut: campagne.statut }]
+      ? [
+          {
+            id: campagne.id,
+            libelle: campagne.libelle,
+            statut: campagne.statut,
+          },
+        ]
       : [],
   );
 }

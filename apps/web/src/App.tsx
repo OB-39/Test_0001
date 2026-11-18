@@ -3,8 +3,10 @@ import { AuthProvider } from "@/auth/AuthContext";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { RequireRole } from "@/auth/RequireRole";
 import { AppLayout } from "@/components/AppLayout";
+import { ConfirmationProvider } from "@/components/ConfirmationProvider";
 import { Connexion } from "@/pages/Connexion";
 import { Activation } from "@/pages/Activation";
+import { MotDePasseOublie } from "@/pages/MotDePasseOublie";
 import { Accueil } from "@/pages/Accueil";
 import { Administration } from "@/pages/Administration";
 import { DirectionStatistiques } from "@/pages/DirectionStatistiques";
@@ -25,6 +27,7 @@ import { ScolariteCampagnes } from "@/pages/ScolariteCampagnes";
 import { ScolariteComptes } from "@/pages/ScolariteComptes";
 import { ScolariteImports } from "@/pages/ScolariteImports";
 import { ScolariteModeration } from "@/pages/ScolariteModeration";
+import { ScolariteProgrammes } from "@/pages/ScolariteProgrammes";
 import { ScolariteRestitution } from "@/pages/ScolariteRestitution";
 import { RestitutionEtudiant } from "@/pages/RestitutionEtudiant";
 import { EnseignantNotes } from "@/pages/EnseignantNotes";
@@ -39,319 +42,336 @@ import { JournalAudit } from "@/pages/JournalAudit";
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Routes publiques */}
-          <Route path="/connexion" element={<Connexion />} />
-          <Route path="/activation" element={<Activation />} />
+      <ConfirmationProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Routes publiques */}
+            <Route path="/connexion" element={<Connexion />} />
+            <Route path="/activation" element={<Activation />} />
+            <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
 
-          {/* Routes protégées : authentification requise */}
-          <Route
-            element={
-              <RequireAuth>
-                <AppLayout />
-              </RequireAuth>
-            }
-          >
-            <Route path="/" element={<Accueil />} />
-            <Route path="/securite" element={<SecuriteCompte />} />
-            <Route path="/notifications" element={<Notifications />} />
+            {/* Routes protégées : authentification requise */}
             <Route
-              path="/journal-audit"
               element={
-                <RequireRole roles={["admin", "scolarite"]}>
-                  <JournalAudit />
-                </RequireRole>
+                <RequireAuth>
+                  <AppLayout />
+                </RequireAuth>
               }
-            />
-            <Route
-              path="/archives-annuelles"
-              element={
-                <RequireRole role="admin">
-                  <ArchivesAnnuelles />
-                </RequireRole>
-              }
-            />
+            >
+              <Route path="/" element={<Accueil />} />
+              <Route path="/securite" element={<SecuriteCompte />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route
+                path="/journal-audit"
+                element={
+                  <RequireRole roles={["admin", "scolarite"]}>
+                    <JournalAudit />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/archives-annuelles"
+                element={
+                  <RequireRole role="admin">
+                    <ArchivesAnnuelles />
+                  </RequireRole>
+                }
+              />
 
-            {/* Étudiant & Délégué */}
-            <Route
-              path="/mes-notes"
-              element={
-                <RequireRole roles={["etudiant", "delegue"]}>
-                  <EtudiantNotes />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/mes-presences"
-              element={
-                <RequireRole roles={["etudiant", "delegue"]}>
-                  <EtudiantPresences />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/evaluations"
-              element={
-                <RequireRole roles={["etudiant", "delegue"]}>
-                  <ListeEvaluations />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/evaluations/:ueId"
-              element={
-                <RequireRole roles={["etudiant", "delegue"]}>
-                  <EvaluationUE />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/mes-evaluations"
-              element={<Navigate to="/evaluations" replace />}
-            />
+              {/* Étudiant & Délégué */}
+              <Route
+                path="/mes-notes"
+                element={
+                  <RequireRole roles={["etudiant", "delegue"]}>
+                    <EtudiantNotes />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/mes-presences"
+                element={
+                  <RequireRole roles={["etudiant", "delegue"]}>
+                    <EtudiantPresences />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/evaluations"
+                element={
+                  <RequireRole roles={["etudiant", "delegue"]}>
+                    <ListeEvaluations />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/evaluations/:ueId"
+                element={
+                  <RequireRole roles={["etudiant", "delegue"]}>
+                    <EvaluationUE />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/mes-evaluations"
+                element={<Navigate to="/evaluations" replace />}
+              />
 
-            {/* Étudiant & Délégué : Restitution */}
-            <Route
-              path="/restitution"
-              element={
-                <RequireRole roles={["etudiant", "delegue"]}>
-                  <RestitutionEtudiant />
-                </RequireRole>
-              }
-            />
+              {/* Étudiant & Délégué : Restitution */}
+              <Route
+                path="/restitution"
+                element={
+                  <RequireRole roles={["etudiant", "delegue"]}>
+                    <RestitutionEtudiant />
+                  </RequireRole>
+                }
+              />
 
-            {/* Lecture selon le périmètre du rôle ; saisie réservée au délégué */}
-            <Route
-              path="/cahier-texte"
-              element={
-                <RequireRole
-                  roles={[
-                    "delegue",
-                    "enseignant",
-                    "etudiant",
-                    "chef_departement",
-                    "scolarite",
-                    "directeur_campus",
-                    "directeur_general",
-                  ]}
-                >
-                  <CahierTexte />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/cahier-texte/nouvelle"
-              element={
-                <RequireRole role="delegue">
-                  <FormSeance />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/cahier-texte/:id"
-              element={
-                <RequireRole
-                  roles={[
-                    "delegue",
-                    "enseignant",
-                    "etudiant",
-                    "chef_departement",
-                    "scolarite",
-                  ]}
-                >
-                  <DetailSeance />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/cahier-texte/:id/modifier"
-              element={
-                <RequireRole role="delegue">
-                  <FormSeance />
-                </RequireRole>
-              }
-            />
+              {/* Lecture selon le périmètre du rôle ; saisie réservée au délégué */}
+              <Route
+                path="/cahier-texte"
+                element={
+                  <RequireRole
+                    roles={[
+                      "delegue",
+                      "enseignant",
+                      "etudiant",
+                      "chef_departement",
+                      "scolarite",
+                      "directeur_campus",
+                      "directeur_general",
+                    ]}
+                  >
+                    <CahierTexte />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/cahier-texte/nouvelle"
+                element={
+                  <RequireRole role="delegue">
+                    <FormSeance />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/cahier-texte/:id"
+                element={
+                  <RequireRole
+                    roles={[
+                      "delegue",
+                      "enseignant",
+                      "etudiant",
+                      "chef_departement",
+                      "scolarite",
+                    ]}
+                  >
+                    <DetailSeance />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/cahier-texte/:id/modifier"
+                element={
+                  <RequireRole role="delegue">
+                    <FormSeance />
+                  </RequireRole>
+                }
+              />
 
-            {/* Enseignant */}
-            <Route
-              path="/enseignant/notes"
-              element={
-                <RequireRole role="enseignant">
-                  <EnseignantNotes />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/enseignant/presences"
-              element={
-                <RequireRole role="enseignant">
-                  <EnseignantPresences />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/resultats"
-              element={
-                <RequireRole
-                  roles={[
-                    "enseignant",
-                    "chef_departement",
-                    "scolarite",
-                    "directeur_campus",
-                    "directeur_general",
-                  ]}
-                >
-                  <MesResultats />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/resultats/:ueId"
-              element={
-                <RequireRole
-                  roles={[
-                    "enseignant",
-                    "chef_departement",
-                    "scolarite",
-                    "directeur_campus",
-                    "directeur_general",
-                  ]}
-                >
-                  <FicheResultatUE />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/mes-resultats"
-              element={<Navigate to="/resultats" replace />}
-            />
-            <Route
-              path="/visas"
-              element={
-                <RequireRole role="enseignant">
-                  <Visas />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/seances-a-viser"
-              element={<Navigate to="/visas" replace />}
-            />
+              {/* Enseignant */}
+              <Route
+                path="/enseignant/notes"
+                element={
+                  <RequireRole role="enseignant">
+                    <EnseignantNotes />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/enseignant/presences"
+                element={
+                  <RequireRole role="enseignant">
+                    <EnseignantPresences />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/resultats"
+                element={
+                  <RequireRole
+                    roles={[
+                      "enseignant",
+                      "chef_departement",
+                      "scolarite",
+                      "directeur_campus",
+                      "directeur_general",
+                    ]}
+                  >
+                    <MesResultats />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/resultats/:ueId"
+                element={
+                  <RequireRole
+                    roles={[
+                      "enseignant",
+                      "chef_departement",
+                      "scolarite",
+                      "directeur_campus",
+                      "directeur_general",
+                    ]}
+                  >
+                    <FicheResultatUE />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/mes-resultats"
+                element={<Navigate to="/resultats" replace />}
+              />
+              <Route
+                path="/visas"
+                element={
+                  <RequireRole role="enseignant">
+                    <Visas />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/seances-a-viser"
+                element={<Navigate to="/visas" replace />}
+              />
 
-            {/* Chef de département */}
-            <Route
-              path="/participation"
-              element={
-                <RequireRole role="chef_departement">
-                  <Participation />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/synthese"
-              element={
-                <RequireRole role="chef_departement">
-                  <SynthesePage />
-                </RequireRole>
-              }
-            />
+              {/* Chef de département */}
+              <Route
+                path="/participation"
+                element={
+                  <RequireRole role="chef_departement">
+                    <Participation />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/synthese"
+                element={
+                  <RequireRole role="chef_departement">
+                    <SynthesePage />
+                  </RequireRole>
+                }
+              />
 
-            {/* Scolarité */}
-            <Route
-              path="/scolarite"
-              element={
-                <RequireRole role="scolarite">
-                  <ScolariteTableauDeBord />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/scolarite/campagnes"
-              element={
-                <RequireRole role="scolarite">
-                  <ScolariteCampagnes />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/scolarite/comptes"
-              element={
-                <RequireRole roles={["scolarite", "admin"]}>
-                  <ScolariteComptes />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/scolarite/imports"
-              element={
-                <RequireRole roles={["scolarite", "admin"]}>
-                  <ScolariteImports />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/scolarite/moderation"
-              element={
-                <RequireRole role="scolarite">
-                  <ScolariteModeration />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/direction/commentaires"
-              element={
-                <RequireRole roles={["directeur_campus", "directeur_general"]}>
-                  <ScolariteModeration />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/scolarite/restitution"
-              element={
-                <RequireRole role="scolarite">
-                  <ScolariteRestitution />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/campagnes"
-              element={<Navigate to="/scolarite/campagnes" replace />}
-            />
+              {/* Scolarité */}
+              <Route
+                path="/scolarite"
+                element={
+                  <RequireRole role="scolarite">
+                    <ScolariteTableauDeBord />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/scolarite/campagnes"
+                element={
+                  <RequireRole role="scolarite">
+                    <ScolariteCampagnes />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/scolarite/comptes"
+                element={
+                  <RequireRole roles={["scolarite", "admin"]}>
+                    <ScolariteComptes />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/scolarite/imports"
+                element={
+                  <RequireRole roles={["scolarite", "admin"]}>
+                    <ScolariteImports />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/scolarite/programmes"
+                element={
+                  <RequireRole role="scolarite">
+                    <ScolariteProgrammes />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/scolarite/moderation"
+                element={
+                  <RequireRole role="scolarite">
+                    <ScolariteModeration />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/direction/commentaires"
+                element={
+                  <RequireRole
+                    roles={["directeur_campus", "directeur_general"]}
+                  >
+                    <ScolariteModeration />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/scolarite/restitution"
+                element={
+                  <RequireRole role="scolarite">
+                    <ScolariteRestitution />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/campagnes"
+                element={<Navigate to="/scolarite/campagnes" replace />}
+              />
 
-            {/* Admin */}
-            <Route
-              path="/direction/statistiques"
-              element={
-                <RequireRole roles={["directeur_campus", "directeur_general"]}>
-                  <DirectionStatistiques />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/direction/controles"
-              element={
-                <RequireRole roles={["directeur_campus", "directeur_general"]}>
-                  <DirectionStatistiques />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/administration"
-              element={
-                <RequireRole role="admin">
-                  <Administration />
-                </RequireRole>
-              }
-            />
-          </Route>
+              {/* Admin */}
+              <Route
+                path="/direction/statistiques"
+                element={
+                  <RequireRole
+                    roles={["directeur_campus", "directeur_general"]}
+                  >
+                    <DirectionStatistiques />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/direction/controles"
+                element={
+                  <RequireRole
+                    roles={["directeur_campus", "directeur_general"]}
+                  >
+                    <DirectionStatistiques />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/administration"
+                element={
+                  <RequireRole role="admin">
+                    <Administration />
+                  </RequireRole>
+                }
+              />
+            </Route>
 
-          {/* Pages d'erreur */}
-          <Route path="/acces-refuse" element={<AccesRefuse />} />
-          <Route path="/404" element={<PageIntrouvable />} />
-          <Route path="*" element={<Navigate to="/404" replace />} />
-        </Routes>
-      </BrowserRouter>
+            {/* Pages d'erreur */}
+            <Route path="/acces-refuse" element={<AccesRefuse />} />
+            <Route path="/404" element={<PageIntrouvable />} />
+            <Route path="*" element={<Navigate to="/404" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ConfirmationProvider>
     </AuthProvider>
   );
 }

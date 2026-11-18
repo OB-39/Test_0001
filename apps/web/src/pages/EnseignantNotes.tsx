@@ -17,12 +17,14 @@ import {
   YAxis,
 } from 'recharts';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import type { CahierNotes, CoursDossier } from '@/api/types';
 import { PageHeader, Button, Alert, Badge } from '@/components/ui';
 
 const PRESETS_EVAL = ['Devoir 1', 'Devoir 2'];
 
 export function EnseignantNotes() {
+  const { confirmer } = useConfirmation();
   const [cours, setCours] = useState<CoursDossier[]>([]);
   const [courseId, setCourseId] = useState<number | null>(null);
   const [progressionStudentId, setProgressionStudentId] = useState<number | null>(null);
@@ -109,6 +111,13 @@ export function EnseignantNotes() {
   async function creerEvaluation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (courseId === null || !libelle.trim()) return;
+    const confirme = await confirmer({
+      title: 'Créer une colonne d’évaluation ?',
+      message: `La colonne « ${libelle.trim()} » sera ajoutée au cahier de notes de cette UE et apparaîtra dans le suivi des étudiants.`,
+      confirmLabel: 'Créer la colonne',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setErreur(null);
     setMessage(null);
     try {
@@ -147,6 +156,13 @@ export function EnseignantNotes() {
     if (!cahier) return;
     const evaluation = cahier.evaluations.find((ligne) => ligne.id === evaluationId);
     if (!evaluation) return;
+    const confirme = await confirmer({
+      title: 'Enregistrer les notes ?',
+      message: `Les notes de « ${evaluation.libelle} » seront mises à jour pour les ${cahier.etudiants.length} étudiants de cette UE. Les étudiants pourront les consulter dans leur dossier académique.`,
+      confirmLabel: 'Enregistrer les notes',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnregistrement(evaluationId);
     setErreur(null);
     setMessage(null);

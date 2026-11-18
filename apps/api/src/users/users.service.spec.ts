@@ -26,11 +26,15 @@ describe('UsersService', () => {
 
   it('retourne l utilisateur trouve', async () => {
     db.query.mockResolvedValue([{ id: 1, nom: 'TEST' }]);
-    await expect(service.trouverParIdentifiant('TEST-0001')).resolves.toMatchObject({ id: 1 });
+    await expect(
+      service.trouverParIdentifiant('TEST-0001'),
+    ).resolves.toMatchObject({ id: 1 });
   });
 
   it('retrouve un utilisateur par son identifiant numerique', async () => {
-    db.query.mockResolvedValueOnce([{ id: 4, nom: 'TEST' }]).mockResolvedValueOnce([]);
+    db.query
+      .mockResolvedValueOnce([{ id: 4, nom: 'TEST' }])
+      .mockResolvedValueOnce([]);
     await expect(service.trouverParId(4)).resolves.toMatchObject({ id: 4 });
     await expect(service.trouverParId(99)).resolves.toBeNull();
   });
@@ -46,6 +50,24 @@ describe('UsersService', () => {
   it('liste les roles', async () => {
     db.query.mockResolvedValue([{ role: 'etudiant' }, { role: 'delegue' }]);
     await expect(service.rolesDe(1)).resolves.toEqual(['etudiant', 'delegue']);
+  });
+
+  it('permet à la Scolarité de voir les comptes hors campus sans élargir le périmètre des actions', async () => {
+    db.query.mockResolvedValueOnce([
+      { id: 20, dansPerimetre: false, peutSupprimer: false },
+    ]);
+
+    await expect(service.listerComptes(7, true)).resolves.toEqual([
+      { id: 20, dansPerimetre: false, peutSupprimer: false },
+    ]);
+
+    expect(db.query.mock.calls[0][0]).toContain(
+      '$2::boolean OR $1::int IS NULL',
+    );
+    expect(db.query.mock.calls[0][0]).toContain(
+      "perimetre.role NOT IN ('etudiant', 'delegue', 'enseignant')",
+    );
+    expect(db.query.mock.calls[0][1]).toEqual([7, true]);
   });
 
   it('enregistre un echec avec le seuil et la duree de verrouillage', async () => {
@@ -71,9 +93,21 @@ describe('UsersService', () => {
     await service.supprimerCompte(20, 1, 'admin', null);
 
     expect(db.transaction).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls.some(([sql]) => String(sql).includes('deleted_at = NOW()'))).toBe(true);
-    expect(query.mock.calls.some(([sql]) => String(sql).includes('UPDATE identity.refresh_tokens'))).toBe(true);
-    expect(query.mock.calls.some(([sql]) => String(sql).includes('DELETE FROM identity.user_roles'))).toBe(true);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('deleted_at = NOW()'),
+      ),
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('UPDATE identity.refresh_tokens'),
+      ),
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('DELETE FROM identity.user_roles'),
+      ),
+    ).toBe(true);
     expect(audit.enregistrerDans).toHaveBeenCalledWith(
       query,
       expect.objectContaining({
@@ -85,9 +119,9 @@ describe('UsersService', () => {
   });
 
   it('refuse la suppression de son propre compte avant toute transaction', async () => {
-    await expect(service.supprimerCompte(1, 1, 'admin', null)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.supprimerCompte(1, 1, 'admin', null),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
@@ -97,11 +131,15 @@ describe('UsersService', () => {
       .mockResolvedValueOnce([{ role: 'etudiant' }])
       .mockResolvedValueOnce([{ autorise: false }]);
 
-    await expect(service.supprimerCompte(20, 1, 'scolarite', 7)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.supprimerCompte(20, 1, 'scolarite', 7),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(audit.enregistrerDans).not.toHaveBeenCalled();
-    expect(query.mock.calls.some(([sql]) => String(sql).includes('deleted_at = NOW()'))).toBe(false);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('deleted_at = NOW()'),
+      ),
+    ).toBe(false);
   });
 
   it('protège le dernier compte administrateur', async () => {
@@ -110,9 +148,9 @@ describe('UsersService', () => {
       .mockResolvedValueOnce([{ role: 'admin' }])
       .mockResolvedValueOnce([{ id: 1 }]);
 
-    await expect(service.supprimerCompte(20, 1, 'admin', null)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.supprimerCompte(20, 1, 'admin', null),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(audit.enregistrerDans).not.toHaveBeenCalled();
   });
 });

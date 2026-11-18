@@ -10,6 +10,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import type {
   CoursDossier,
   DetailSeancePresence,
@@ -21,6 +22,7 @@ import { PageHeader, Button, Alert, Badge } from '@/components/ui';
 const PRESETS_SEANCE = ['CM : Cours magistral', 'TD : Travaux dirigés', 'TP : Travaux pratiques'];
 
 export function EnseignantPresences() {
+  const { confirmer } = useConfirmation();
   const [cours, setCours] = useState<CoursDossier[]>([]);
   const [courseId, setCourseId] = useState<number | null>(null);
   const [seances, setSeances] = useState<SeancePresence[]>([]);
@@ -108,6 +110,13 @@ export function EnseignantPresences() {
   async function creerSeance(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (courseId === null || !libelle.trim()) return;
+    const confirme = await confirmer({
+      title: 'Créer une séance de présence ?',
+      message: `La séance « ${libelle.trim()} » sera ajoutée au suivi des présences de cette UE. Vous pourrez ensuite y saisir les statuts des étudiants.`,
+      confirmLabel: 'Créer la séance',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setErreur(null);
     setMessage(null);
     try {
@@ -145,6 +154,16 @@ export function EnseignantPresences() {
 
   async function enregistrer() {
     if (!detail || detail.etudiants.some((etudiant) => !statuts[etudiant.id])) return;
+    const absents = detail.etudiants.filter(
+      (etudiant) => statuts[etudiant.id] === 'absent',
+    ).length;
+    const confirme = await confirmer({
+      title: 'Enregistrer les présences ?',
+      message: `Les statuts de présence seront enregistrés pour ${detail.etudiants.length} étudiants, dont ${absents} absence(s). Ces données seront visibles dans le dossier académique des étudiants.`,
+      confirmLabel: 'Enregistrer les présences',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnregistrement(true);
     setErreur(null);
     setMessage(null);

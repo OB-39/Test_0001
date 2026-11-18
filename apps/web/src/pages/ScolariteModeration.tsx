@@ -3,6 +3,7 @@ import { CheckCircle, EyeOff, MessageSquare, ShieldCheck } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import type { CampagneCommentaire, CommentaireAModerer } from '@/api/types';
 import { useAuth } from '@/auth/AuthContext';
+import { useConfirmation } from '@/components/useConfirmation';
 import { PageHeader, Button, Alert, Badge, InfoBubble } from '@/components/ui';
 
 const STATUT_TABS: { valeur: string; libelle: string }[] = [
@@ -24,6 +25,7 @@ function melanger<T>(arr: T[]): T[] {
 }
 
 export function ScolariteModeration() {
+  const { confirmer } = useConfirmation();
   const { aRole } = useAuth();
   const lectureSeule = aRole('directeur_campus') || aRole('directeur_general');
   const [campagnes, setCampagnes] = useState<CampagneCommentaire[]>([]);
@@ -85,6 +87,16 @@ export function ScolariteModeration() {
   }, [campagneId, statut]);
 
   async function moderer(id: string | number, decision: 'valide' | 'masque') {
+    const confirme = await confirmer({
+      title: decision === 'valide' ? 'Valider ce commentaire ?' : 'Masquer ce commentaire ?',
+      message:
+        decision === 'valide'
+          ? 'Le commentaire anonyme sera transmis aux enseignants concernés avec la restitution.'
+          : 'Le commentaire sera masqué et ne sera pas transmis aux enseignants. Cette action est conservée dans la modération.',
+      confirmLabel: decision === 'valide' ? 'Valider le commentaire' : 'Masquer le commentaire',
+      variant: decision === 'valide' ? 'warning' : 'danger',
+    });
+    if (!confirme) return;
     setEnCoursId(id);
     try {
       const c = await api.scolariteModererCommentaire(id, { statut: decision });
@@ -94,7 +106,9 @@ export function ScolariteModeration() {
           : prev.map((x) => (x.id === c.id ? c : x)),
       );
     } catch (err) {
-      if (err instanceof ApiError) setErreur(err.messages.join(' '));
+      setErreur(
+        err instanceof ApiError ? err.messages.join(' ') : 'Erreur réseau lors de la modération.',
+      );
     } finally {
       setEnCoursId(null);
     }

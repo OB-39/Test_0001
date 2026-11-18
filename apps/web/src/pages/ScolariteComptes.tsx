@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -8,23 +8,27 @@ import {
   Send,
   Trash2,
   Users,
-} from 'lucide-react';
-import { api, ApiError } from '@/api';
-import type { CompteAdministration, Role } from '@/api/types';
-import { LIBELLES_ROLES } from '@/components/menuConfig';
-import { PageHeader, Button, Alert, Badge, StatCard } from '@/components/ui';
+} from "lucide-react";
+import { api, ApiError } from "@/api";
+import type { CompteAdministration, Role } from "@/api/types";
+import { LIBELLES_ROLES } from "@/components/menuConfig";
+import { useConfirmation } from "@/components/useConfirmation";
+import { PageHeader, Button, Alert, Badge, StatCard } from "@/components/ui";
 
-type FiltreActivation = 'tous' | 'a_activer' | 'actives';
+type FiltreActivation = "tous" | "a_activer" | "actives";
 
 export function ScolariteComptes() {
+  const { confirmer } = useConfirmation();
   const [comptes, setComptes] = useState<CompteAdministration[]>([]);
-  const [recherche, setRecherche] = useState('');
-  const [filtreStatut, setFiltreStatut] = useState<FiltreActivation>('tous');
-  const [filtreRole, setFiltreRole] = useState<string>('tous');
+  const [recherche, setRecherche] = useState("");
+  const [filtreStatut, setFiltreStatut] = useState<FiltreActivation>("tous");
+  const [filtreRole, setFiltreRole] = useState<string>("tous");
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
-  const [envoiActivation, setEnvoiActivation] = useState<number | 'groupe' | null>(null);
+  const [envoiActivation, setEnvoiActivation] = useState<
+    number | "groupe" | null
+  >(null);
   const [suppression, setSuppression] = useState<number | null>(null);
   const [verificationSmtp, setVerificationSmtp] = useState(false);
 
@@ -34,8 +38,8 @@ export function ScolariteComptes() {
     try {
       setComptes(await api.scolariteComptes());
     } catch (err) {
-      if (err instanceof ApiError) setErreur(err.messages.join(' '));
-      else setErreur('Erreur réseau lors du chargement des comptes.');
+      if (err instanceof ApiError) setErreur(err.messages.join(" "));
+      else setErreur("Erreur réseau lors du chargement des comptes.");
     } finally {
       setChargement(false);
     }
@@ -46,9 +50,10 @@ export function ScolariteComptes() {
   }, [charger]);
 
   async function envoyerActivation(compte: CompteAdministration) {
+    if (!compte.dansPerimetre) return;
     const identifiant = compte.matricule ?? compte.email;
     if (!identifiant) {
-      setErreur('Ce compte ne possède ni matricule ni adresse e-mail.');
+      setErreur("Ce compte ne possède ni matricule ni adresse e-mail.");
       setConfirmation(null);
       return;
     }
@@ -57,23 +62,27 @@ export function ScolariteComptes() {
     setErreur(null);
     setConfirmation(null);
     try {
-      const resultat = await api.scolariteGenererCodes({ identifiants: [identifiant] });
+      const resultat = await api.scolariteGenererCodes({
+        identifiants: [identifiant],
+      });
       if (resultat.courrielsEnfiles > 0) {
         setConfirmation(
           `Le courriel d’activation de ${compte.prenom} ${compte.nom} a été envoyé.`,
         );
       } else if (resultat.comptesSansEmail.length > 0) {
-        setErreur(`Aucune adresse e-mail n’est enregistrée pour ${compte.prenom} ${compte.nom}.`);
+        setErreur(
+          `Aucune adresse e-mail n’est enregistrée pour ${compte.prenom} ${compte.nom}.`,
+        );
       } else {
         setErreur(
-          'Aucun code n’a été généré. Le compte est peut-être déjà activé ou hors de votre périmètre.',
+          "Aucun code n’a été généré. Le compte est peut-être déjà activé ou hors de votre périmètre.",
         );
       }
     } catch (err) {
       setErreur(
         err instanceof ApiError
-          ? err.messages.join(' ')
-          : 'Erreur réseau lors de l’envoi du code d’activation.',
+          ? err.messages.join(" ")
+          : "Erreur réseau lors de l’envoi du code d’activation.",
       );
     } finally {
       setEnvoiActivation(null);
@@ -83,20 +92,31 @@ export function ScolariteComptes() {
   const comptesFiltres = useMemo(() => {
     const q = recherche.trim().toLocaleLowerCase();
     return comptes.filter((compte) => {
-      if (filtreStatut === 'a_activer' && compte.motDePasseConfigure) return false;
-      if (filtreStatut === 'actives' && !compte.motDePasseConfigure) return false;
-      if (filtreRole !== 'tous' && !compte.roles.includes(filtreRole as Role)) return false;
+      if (filtreStatut === "a_activer" && compte.motDePasseConfigure)
+        return false;
+      if (filtreStatut === "actives" && !compte.motDePasseConfigure)
+        return false;
+      if (filtreRole !== "tous" && !compte.roles.includes(filtreRole as Role))
+        return false;
       if (!q) return true;
-      return [compte.matricule, compte.email, compte.nom, compte.prenom, ...compte.roles].some(
-        (valeur) => valeur?.toLocaleLowerCase().includes(q),
-      );
+      return [
+        compte.matricule,
+        compte.email,
+        compte.nom,
+        compte.prenom,
+        ...compte.roles,
+      ].some((valeur) => valeur?.toLocaleLowerCase().includes(q));
     });
   }, [comptes, recherche, filtreStatut, filtreRole]);
 
   const comptesAActiverFiltres = useMemo(
     () =>
       comptesFiltres.filter(
-        (c) => !c.motDePasseConfigure && Boolean(c.email) && Boolean(c.matricule ?? c.email),
+        (c) =>
+          c.dansPerimetre &&
+          !c.motDePasseConfigure &&
+          Boolean(c.email) &&
+          Boolean(c.matricule ?? c.email),
       ),
     [comptesFiltres],
   );
@@ -107,7 +127,7 @@ export function ScolariteComptes() {
       .filter((id): id is string => Boolean(id));
     if (identifiants.length === 0) return;
 
-    setEnvoiActivation('groupe');
+    setEnvoiActivation("groupe");
     setErreur(null);
     setConfirmation(null);
     try {
@@ -118,7 +138,7 @@ export function ScolariteComptes() {
     } catch (err) {
       setErreur(
         err instanceof ApiError
-          ? err.messages.join(' ')
+          ? err.messages.join(" ")
           : "Erreur lors de l'envoi groupé des codes d'activation.",
       );
     } finally {
@@ -133,11 +153,13 @@ export function ScolariteComptes() {
     try {
       await api.scolariteVerifierSmtp();
       setConfirmation(
-        'Connexion SMTP vérifiée. Aucun e-mail de test n’a été envoyé; la réception dépend aussi du fournisseur et de la boîte destinataire.',
+        "Connexion SMTP vérifiée. Aucun e-mail de test n’a été envoyé; la réception dépend aussi du fournisseur et de la boîte destinataire.",
       );
     } catch (err) {
       setErreur(
-        err instanceof ApiError ? err.messages.join(' ') : 'Vérification SMTP impossible.',
+        err instanceof ApiError
+          ? err.messages.join(" ")
+          : "Vérification SMTP impossible.",
       );
     } finally {
       setVerificationSmtp(false);
@@ -145,28 +167,32 @@ export function ScolariteComptes() {
   }
 
   async function supprimerCompte(compte: CompteAdministration) {
-    const identifiant = compte.matricule ?? compte.email ?? `compte ${compte.id}`;
-    if (
-      !window.confirm(
-        `Supprimer le compte ${compte.prenom} ${compte.nom} (${identifiant}) ? Le compte sera désactivé et anonymisé; les données académiques seront conservées.`,
-      )
-    ) {
-      return;
-    }
+    if (!compte.peutSupprimer) return;
+    const identifiant =
+      compte.matricule ?? compte.email ?? `compte ${compte.id}`;
+    const confirme = await confirmer({
+      title: "Supprimer ce compte ?",
+      message: `Le compte de ${compte.prenom} ${compte.nom} (${identifiant}) sera désactivé et anonymisé. Les données académiques seront conservées et l’action inscrite au journal d’audit.`,
+      confirmLabel: "Supprimer le compte",
+      variant: "danger",
+    });
+    if (!confirme) return;
     setSuppression(compte.id);
     setErreur(null);
     setConfirmation(null);
     try {
       await api.scolariteSupprimerCompte(compte.id);
-      setComptes((existants) => existants.filter((element) => element.id !== compte.id));
+      setComptes((existants) =>
+        existants.filter((element) => element.id !== compte.id),
+      );
       setConfirmation(
         `Le compte ${identifiant} a été supprimé. L’action est inscrite au journal d’audit.`,
       );
     } catch (err) {
       setErreur(
         err instanceof ApiError
-          ? err.messages.join(' ')
-          : 'Erreur réseau lors de la suppression du compte.',
+          ? err.messages.join(" ")
+          : "Erreur réseau lors de la suppression du compte.",
       );
     } finally {
       setSuppression(null);
@@ -184,10 +210,10 @@ export function ScolariteComptes() {
     <div className="space-y-5 max-w-6xl mx-auto animate-fade-in pb-6">
       <PageHeader
         title="Gestion des comptes utilisateurs"
-        description="Consultez les comptes, filtrez par état d'activation et envoyez les codes d'accès par e-mail."
+        description="Consultez tous les comptes ajoutés par l’Administration. L’envoi des codes et les autres actions restent limités à votre campus."
         breadcrumbs={[
-          { label: 'Accueil', href: '/' },
-          { label: 'Gestion des comptes' },
+          { label: "Accueil", href: "/" },
+          { label: "Gestion des comptes" },
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -195,7 +221,7 @@ export function ScolariteComptes() {
               <Button
                 variant="primary"
                 size="sm"
-                isLoading={envoiActivation === 'groupe'}
+                isLoading={envoiActivation === "groupe"}
                 leftIcon={<Send className="w-3.5 h-3.5" />}
                 onClick={() => void envoyerActivationGroupee()}
               >
@@ -209,13 +235,17 @@ export function ScolariteComptes() {
               disabled={verificationSmtp}
               onClick={() => void verifierSmtp()}
             >
-              {verificationSmtp ? 'Vérification SMTP…' : 'Tester SMTP'}
+              {verificationSmtp ? "Vérification SMTP…" : "Tester SMTP"}
             </Button>
             <Button
               variant="outline"
               size="sm"
               disabled={chargement}
-              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${chargement ? 'animate-spin' : ''}`} />}
+              leftIcon={
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${chargement ? "animate-spin" : ""}`}
+                />
+              }
               onClick={() => void charger()}
             >
               Actualiser
@@ -225,7 +255,11 @@ export function ScolariteComptes() {
       />
 
       {confirmation && (
-        <Alert variant="success" title="Envoi confirmé" onClose={() => setConfirmation(null)}>
+        <Alert
+          variant="success"
+          title="Envoi confirmé"
+          onClose={() => setConfirmation(null)}
+        >
           {confirmation}
         </Alert>
       )}
@@ -242,14 +276,18 @@ export function ScolariteComptes() {
           <StatCard
             title="Total comptes"
             value={stats.total}
-            icon={<Users className="w-4 h-4 sm:w-5 sm:h-5 text-enp-blue-primary" />}
-            description="Périmètre autorisé"
+            icon={
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-enp-blue-primary" />
+            }
+            description="Tous les comptes visibles"
             className="p-3 sm:p-4"
           />
           <StatCard
             title="Comptes activés"
             value={stats.actives}
-            icon={<CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-enp-green-valid" />}
+            icon={
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-enp-green-valid" />
+            }
             description="Mot de passe défini"
             variant="success"
             className="p-3 sm:p-4"
@@ -259,7 +297,7 @@ export function ScolariteComptes() {
             value={stats.aActiver}
             icon={<Clock className="w-4 h-4 sm:w-5 sm:h-5 text-enp-gold" />}
             description="En attente de code"
-            variant={stats.aActiver > 0 ? 'warning' : 'default'}
+            variant={stats.aActiver > 0 ? "warning" : "default"}
             className="p-3 sm:p-4"
           />
         </div>
@@ -272,9 +310,9 @@ export function ScolariteComptes() {
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
-                { id: 'tous', label: `Tous (${stats.total})` },
-                { id: 'a_activer', label: `À activer (${stats.aActiver})` },
-                { id: 'actives', label: `Activés (${stats.actives})` },
+                { id: "tous", label: `Tous (${stats.total})` },
+                { id: "a_activer", label: `À activer (${stats.aActiver})` },
+                { id: "actives", label: `Activés (${stats.actives})` },
               ] as const
             ).map((tab) => (
               <button
@@ -283,8 +321,8 @@ export function ScolariteComptes() {
                 onClick={() => setFiltreStatut(tab.id)}
                 className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
                   filtreStatut === tab.id
-                    ? 'bg-enp-blue-deep text-white border-enp-blue-deep'
-                    : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40'
+                    ? "bg-enp-blue-deep text-white border-enp-blue-deep"
+                    : "bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40"
                 }`}
               >
                 {tab.label}
@@ -335,28 +373,52 @@ export function ScolariteComptes() {
             <table className="w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-enp-blue-deep text-white text-xs uppercase tracking-wider">
-                  <th scope="col" className="px-4 py-3 font-semibold">Identifiant</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Nom complet</th>
-                  <th scope="col" className="px-4 py-3 font-semibold hidden md:table-cell">E-mail</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Rôles</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-center">Statut</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-right">Action</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Identifiant
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Nom complet
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 font-semibold hidden md:table-cell"
+                  >
+                    E-mail
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Rôles
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 font-semibold text-center"
+                  >
+                    Statut
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 font-semibold text-right"
+                  >
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-enp-border">
                 {comptesFiltres.map((compte) => (
-                  <tr key={compte.id} className="hover:bg-enp-blue-ice/20 transition-colors">
+                  <tr
+                    key={compte.id}
+                    className="hover:bg-enp-blue-ice/20 transition-colors"
+                  >
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-bold text-enp-blue-deep">
-                      {compte.matricule ?? '-'}
+                      {compte.matricule ?? "-"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-semibold text-enp-black">
                       {compte.prenom} {compte.nom}
                       <span className="block md:hidden text-xs font-normal text-enp-gray-medium">
-                        {compte.email ?? '-'}
+                        {compte.email ?? "-"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-enp-gray-medium hidden md:table-cell">
-                      {compte.email ?? '-'}
+                      {compte.email ?? "-"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
@@ -367,7 +429,9 @@ export function ScolariteComptes() {
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-xs text-enp-gray-medium">Aucun rôle</span>
+                          <span className="text-xs text-enp-gray-medium">
+                            Aucun rôle
+                          </span>
                         )}
                       </div>
                     </td>
@@ -377,44 +441,71 @@ export function ScolariteComptes() {
                       ) : (
                         <Badge variant="warning">À activer</Badge>
                       )}
+                      {!compte.dansPerimetre && (
+                        <span className="mt-1 block text-xs text-enp-gray-medium">
+                          Consultation seule — hors campus
+                        </span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-2">
-                      {!compte.motDePasseConfigure ? (
+                        {!compte.motDePasseConfigure ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void envoyerActivation(compte)}
+                            disabled={
+                              envoiActivation !== null ||
+                              !compte.email ||
+                              !compte.dansPerimetre
+                            }
+                            isLoading={envoiActivation === compte.id}
+                            leftIcon={<Mail className="w-3.5 h-3.5" />}
+                            title={
+                              !compte.dansPerimetre
+                                ? "Action limitée au campus de votre compte"
+                                : !compte.email
+                                  ? "Aucune adresse e-mail enregistrée"
+                                  : undefined
+                            }
+                          >
+                            Envoyer le code
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-enp-gray-medium">
+                            Opérationnel
+                          </span>
+                        )}
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="danger"
                           size="sm"
-                          onClick={() => void envoyerActivation(compte)}
-                          disabled={envoiActivation !== null || !compte.email}
-                          isLoading={envoiActivation === compte.id}
-                          leftIcon={<Mail className="w-3.5 h-3.5" />}
-                          title={!compte.email ? 'Aucune adresse e-mail enregistrée' : undefined}
+                          disabled={
+                            suppression !== null || !compte.peutSupprimer
+                          }
+                          isLoading={suppression === compte.id}
+                          leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                          aria-label={`Supprimer le compte ${compte.prenom} ${compte.nom}`}
+                          onClick={() => void supprimerCompte(compte)}
+                          title={
+                            !compte.peutSupprimer
+                              ? "Suppression non autorisée pour ce compte"
+                              : undefined
+                          }
                         >
-                          Envoyer le code
+                          Supprimer
                         </Button>
-                      ) : (
-                        <span className="text-xs text-enp-gray-medium">Opérationnel</span>
-                      )}
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        disabled={suppression !== null}
-                        isLoading={suppression === compte.id}
-                        leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-                        aria-label={`Supprimer le compte ${compte.prenom} ${compte.nom}`}
-                        onClick={() => void supprimerCompte(compte)}
-                      >
-                        Supprimer
-                      </Button>
                       </div>
                     </td>
                   </tr>
                 ))}
                 {comptesFiltres.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-enp-gray-medium">
+                    <td
+                      colSpan={6}
+                      className="px-4 py-10 text-center text-sm text-enp-gray-medium"
+                    >
                       Aucun compte ne correspond aux critères sélectionnés.
                     </td>
                   </tr>

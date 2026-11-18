@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api, ApiError } from '@/api';
+import { useConfirmation } from '@/components/useConfirmation';
 import type { Avancement, Seance, UeCahier, TypeSeance, StatutVisa } from '@/api/types';
 import { useAuth } from '@/auth/AuthContext';
 import {
@@ -39,6 +40,7 @@ const LIBELLES_VISA: Record<string, { label: string; variant: 'warning' | 'succe
 };
 
 export function CahierTexte() {
+  const { confirmer } = useConfirmation();
   const { aRole } = useAuth();
   const navigate = useNavigate();
 
@@ -123,6 +125,13 @@ export function CahierTexte() {
 
   // Action rapide : Viser directement une séance
   async function viserDirectement(seance: Seance) {
+    const confirme = await confirmer({
+      title: 'Approuver cette séance ?',
+      message: `Votre visa validera le contenu du cahier de texte pour « ${seance.ueCode} » du ${seance.date}. La décision sera enregistrée dans son historique.`,
+      confirmLabel: 'Confirmer le visa',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setSeanceEnCoursVisa(seance.id);
     setMessageSucces(null);
     try {
@@ -147,6 +156,13 @@ export function CahierTexte() {
       setErreurContestation('Veuillez indiquer le motif de votre réserve ou contestation.');
       return;
     }
+    const confirme = await confirmer({
+      title: 'Enregistrer cette contestation ?',
+      message: `Votre commentaire sera conservé dans l’historique de la séance « ${seanceAContester.ueCode} » et visible aux utilisateurs autorisés.`,
+      confirmLabel: 'Enregistrer la contestation',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnvoiContestation(true);
     setErreurContestation(null);
     try {

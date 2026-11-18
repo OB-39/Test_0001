@@ -24,11 +24,13 @@ export class ComptesController {
   async lister(@Req() requete: RequeteAuthentifiee) {
     const utilisateur = requete.utilisateur;
     if (!utilisateur) throw new UnauthorizedException('Jeton manquant');
-    const campusId = await this.campusScope.forScolarite(
-      utilisateur.id,
-      [utilisateur.activeRole],
+    const campusId = await this.campusScope.forScolarite(utilisateur.id, [
+      utilisateur.activeRole,
+    ]);
+    return this.users.listerComptes(
+      campusId,
+      utilisateur.activeRole === 'scolarite',
     );
-    return this.users.listerComptes(campusId);
   }
 
   @Delete(':id')

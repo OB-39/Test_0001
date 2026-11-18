@@ -7,7 +7,10 @@ describe('ComptesController', () => {
     supprimerCompte: jest.fn(),
   };
   const campusScope = { forScolarite: jest.fn() };
-  const controller = new ComptesController(users as never, campusScope as never);
+  const controller = new ComptesController(
+    users as never,
+    campusScope as never,
+  );
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -15,12 +18,14 @@ describe('ComptesController', () => {
   });
 
   it('limite la suppression aux profils admin et Scolarité', async () => {
-    expect(
-      Reflect.getMetadata(
-        ROLES_KEY,
-        ComptesController.prototype.supprimer,
-      ),
-    ).toEqual(['scolarite', 'admin']);
+    const supprimer = Object.getOwnPropertyDescriptor(
+      ComptesController.prototype,
+      'supprimer',
+    )?.value;
+    expect(Reflect.getMetadata(ROLES_KEY, supprimer)).toEqual([
+      'scolarite',
+      'admin',
+    ]);
     users.supprimerCompte.mockResolvedValue(undefined);
 
     await controller.supprimer(15, {
@@ -30,6 +35,30 @@ describe('ComptesController', () => {
 
     expect(campusScope.forScolarite).toHaveBeenCalledWith(8, ['scolarite']);
     expect(users.supprimerCompte).toHaveBeenCalledWith(15, 8, 'scolarite', 7);
+  });
+
+  it('permet à la Scolarité de consulter tous les comptes sans élargir ses actions', async () => {
+    users.listerComptes.mockResolvedValue([]);
+
+    await controller.lister({
+      headers: {},
+      utilisateur: { id: 8, roles: ['scolarite'], activeRole: 'scolarite' },
+    });
+
+    expect(campusScope.forScolarite).toHaveBeenCalledWith(8, ['scolarite']);
+    expect(users.listerComptes).toHaveBeenCalledWith(7, true);
+  });
+
+  it('ne force pas l’inclusion hors périmètre pour un autre profil', async () => {
+    users.listerComptes.mockResolvedValue([]);
+    campusScope.forScolarite.mockResolvedValueOnce(null);
+
+    await controller.lister({
+      headers: {},
+      utilisateur: { id: 8, roles: ['admin'], activeRole: 'admin' },
+    });
+
+    expect(users.listerComptes).toHaveBeenCalledWith(null, false);
   });
 
   it('ne résout pas de campus pour l’administration', async () => {

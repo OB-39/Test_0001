@@ -241,7 +241,8 @@ export interface Avancement {
 /*  Notes et présences                                                */
 /* ------------------------------------------------------------------ */
 
-export type StatutPresenceEtudiant = "present" | "absent" | "retard" | "justifie";
+export type StatutPresenceEtudiant =
+  "present" | "absent" | "retard" | "justifie";
 
 export interface CoursDossier {
   id: number;
@@ -475,6 +476,30 @@ export interface DepartementOption {
   campus: string;
 }
 
+export interface ProgrammeScolarite {
+  id: number;
+  nom: string;
+  departmentId: number;
+  departement: string;
+  campus: string;
+}
+
+export interface UniteEnseignementScolarite {
+  id: number;
+  code: string;
+  intitule: string;
+  credits: number;
+  modifiable: boolean;
+  compositeParentId: number | null;
+  composantes: {
+    id: number;
+    code: string;
+    intitule: string;
+    credits: number;
+  }[];
+  programmes: { id: number; nom: string; departement: string }[];
+}
+
 export interface CodeActivationGenere {
   identifiant: string;
   nom: string;
@@ -499,6 +524,7 @@ export type TypeImport =
   | "affectations"
   | "inscriptions"
   | "delegues"
+  | "mandats-chefs-departement"
   | "catalogue"
   | "presences";
 
@@ -576,6 +602,8 @@ export interface CompteAdministration {
   actif: boolean;
   motDePasseConfigure: boolean;
   roles: Role[];
+  dansPerimetre: boolean;
+  peutSupprimer: boolean;
 }
 
 export interface CampusAdministration {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Download, Archive } from 'lucide-react';
 import { ApiError, api } from '@/api';
 import type { ArchiveAnnuelle } from '@/api/types';
+import { useConfirmation } from '@/components/useConfirmation';
 
 function anneeUniversitaireCourante(): string {
   const date = new Date();
@@ -10,6 +11,7 @@ function anneeUniversitaireCourante(): string {
 }
 
 export function ArchivesAnnuelles() {
+  const { confirmer } = useConfirmation();
   const [annee, setAnnee] = useState(anneeUniversitaireCourante());
   const [archives, setArchives] = useState<ArchiveAnnuelle[]>([]);
   const [archive, setArchive] = useState<ArchiveAnnuelle | null>(null);
@@ -33,7 +35,13 @@ export function ArchivesAnnuelles() {
   }, []);
 
   async function creer() {
-    if (!window.confirm(`Créer l’archive annuelle en lecture seule ${annee} ?`)) return;
+    const confirme = await confirmer({
+      title: 'Créer une archive annuelle ?',
+      message: `L’année universitaire ${annee} sera copiée dans une archive en lecture seule. Les données de l’année active ne seront pas supprimées, mais l’archive ne pourra pas être modifiée.`,
+      confirmLabel: 'Créer l’archive',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setEnCours(true);
     setErreur(null);
     setMessage(null);

@@ -176,6 +176,30 @@ az containerapp job start --resource-group <RESOURCE_GROUP> --name db-migration-
 Cette migration ajoute les métadonnées du catalogue, les contacts de cours et
 les types d'import XLSX au staging.
 
+### Programmes, UE composites et import de mandats
+
+La page `/scolarite/programmes` permet à la Scolarité de gérer les programmes
+de son campus et le catalogue global des UE, regroupées par programme. Une UE
+composite est un regroupement : seules ses UE composantes peuvent avoir des
+offres de cours distinctes. Les suppressions sont protégées par les clés
+étrangères, et la modification d'une UE utilisée sur un autre campus est
+refusée par l'API.
+
+Avant le déploiement de l'API/web qui gère ces relations, appliquer la migration
+025 après la migration 024. Elle ajoute le lien parent/composantes et empêche
+la création d'offres distinctes pour un parent composite :
+
+```powershell
+az acr build --registry <NOM_ACR> --image enp-composite-ues-migration:<TAG> --file infra/sql/Dockerfile.composite-ues-025 .
+az containerapp job update --resource-group <RESOURCE_GROUP> --name db-migration-job --image <NOM_ACR>.azurecr.io/enp-composite-ues-migration:<TAG>
+az containerapp job start --resource-group <RESOURCE_GROUP> --name db-migration-job
+```
+
+Attendre le statut `Succeeded` avant de déployer les images API et web. La page
+des programmes doit ensuite etre verifiee avec un compte Scolarite rattache a
+un campus. L'import `mandats-chefs-departement` utilise le catalogue existant
+des affectations des chefs et ne necessite pas de migration supplementaire.
+
 `Dockerfile.azure` construit le frontend avec `VITE_USE_MOCK=false` et
 `VITE_API_BASE_URL=/api/v1` : le mode maquette n'est donc pas embarque en
 production ; le module contenant les comptes de demonstration est remplace

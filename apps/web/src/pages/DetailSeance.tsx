@@ -19,6 +19,7 @@ import {
 import { api, ApiError } from '@/api';
 import type { PieceJointe, Seance, VersionSeance } from '@/api/types';
 import { useAuth } from '@/auth/AuthContext';
+import { useConfirmation } from '@/components/useConfirmation';
 import {
   PageHeader,
   Button,
@@ -47,6 +48,7 @@ export function DetailSeance() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { aRole, utilisateur } = useAuth();
+  const { confirmer } = useConfirmation();
 
   const [seance, setSeance] = useState<Seance | null>(null);
   const [versions, setVersions] = useState<VersionSeance[]>([]);
@@ -96,6 +98,16 @@ export function DetailSeance() {
 
   async function handleVisa(decision: 'vise' | 'conteste') {
     if (!id) return;
+    const confirme = await confirmer({
+      title: decision === 'vise' ? 'Approuver cette séance ?' : 'Contester cette séance ?',
+      message:
+        decision === 'vise'
+          ? 'Votre visa validera le contenu de cette séance et sera ajouté à son historique.'
+          : 'Votre contestation et son commentaire seront ajoutés à l’historique de cette séance et visibles aux utilisateurs autorisés.',
+      confirmLabel: decision === 'vise' ? 'Confirmer le visa' : 'Confirmer la contestation',
+      variant: 'warning',
+    });
+    if (!confirme) return;
     setActionEnCours(true);
     try {
       await api.visaSeance(Number(id), {

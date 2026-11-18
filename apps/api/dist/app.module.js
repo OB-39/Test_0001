@@ -19,13 +19,26 @@ const users_module_1 = require("./users/users.module");
 const resultats_module_1 = require("./resultats/resultats.module");
 const moderation_module_1 = require("./moderation/moderation.module");
 const imports_module_1 = require("./imports/imports.module");
+const scolarite_module_1 = require("./scolarite/scolarite.module");
+const administration_module_1 = require("./administration/administration.module");
+const direction_etudes_module_1 = require("./direction-etudes/direction-etudes.module");
+const cahier_texte_module_1 = require("./cahier-texte/cahier-texte.module");
+const pilotage_module_1 = require("./pilotage/pilotage.module");
+const dossier_academique_module_1 = require("./dossier-academique/dossier-academique.module");
+const academic_management_module_1 = require("./academic-management/academic-management.module");
+const audit_module_1 = require("./audit/audit.module");
+const notifications_module_1 = require("./notifications/notifications.module");
+const exports_module_1 = require("./exports/exports.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            config_1.ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env', '../../.env'] }),
+            config_1.ConfigModule.forRoot({
+                isGlobal: true,
+                envFilePath: ['.env', '../../.env'],
+            }),
             database_module_1.DatabaseModule,
             health_module_1.HealthModule,
             users_module_1.UsersModule,
@@ -34,6 +47,16 @@ exports.AppModule = AppModule = __decorate([
             resultats_module_1.ResultatsModule,
             moderation_module_1.ModerationModule,
             imports_module_1.ImportsModule,
+            scolarite_module_1.ScolariteModule,
+            administration_module_1.AdministrationModule,
+            direction_etudes_module_1.DirectionEtudesModule,
+            cahier_texte_module_1.CahierTexteModule,
+            pilotage_module_1.PilotageModule,
+            dossier_academique_module_1.DossierAcademiqueModule,
+            academic_management_module_1.AcademicManagementModule,
+            audit_module_1.AuditModule,
+            notifications_module_1.NotificationsModule,
+            exports_module_1.ExportsModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

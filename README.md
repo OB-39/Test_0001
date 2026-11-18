@@ -229,8 +229,10 @@ psql -h <serveur> -p <port> -U <proprietaire> -d enp_evaluation -W -v ON_ERROR_S
 
 Apres les migrations 001 a 019, executer aussi, dans l'ordre, les migrations
 020 (suppression auditee), 021 (matricule du journal d'audit), 022 (inscription
-aux UE du programme et de la meme annee), 023 (absences justifiees) et 024
-(imports XLSX académiques). Pour
+aux UE du programme et de la meme annee), 023 (absences justifiees), 024
+(imports XLSX académiques) et 025 (UE composites). La migration 025 doit etre
+appliquee avant le deploiement de l'API qui gere les relations parent/composantes.
+Pour
 Azure, suivre les commandes de construction et d'execution des jobs dans
 `docs/deploiement-azure.md`.
 
