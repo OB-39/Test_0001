@@ -1,15 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import {
-  FileText,
-  Printer,
-  Save,
-  CheckCircle2,
-  AlertTriangle,
-  Award,
-  ShieldCheck,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
+import { Printer, Save, Award } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import { useConfirmation } from '@/components/useConfirmation';
 import type { Campagne, Synthese, SuitesDonnees, LigneSynthese } from '@/api/types';
@@ -18,7 +8,6 @@ import {
   Button,
   Select,
   Table,
-  Badge,
   Alert,
   Textarea,
   Input,

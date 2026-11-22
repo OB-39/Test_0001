@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Users, CheckCircle2, Activity, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import type { Campagne, ParticipationUe } from '@/api/types';
-import { PageHeader, Button, Alert, StatCard, Badge } from '@/components/ui';
+import { PageHeader, Button, Alert } from '@/components/ui';
 
 export function Participation() {
   const [campagnes, setCampagnes] = useState<Campagne[]>([]);
@@ -15,14 +15,14 @@ export function Participation() {
     try {
       const data = await api.pilotageCampagnes();
       setCampagnes(data);
-      if (data.length > 0 && campagneId === null) {
-        setCampagneId(data[0].id);
+      if (data.length > 0) {
+        setCampagneId((prev) => prev ?? data[0].id);
       }
     } catch (err) {
       if (err instanceof ApiError) setErreur(err.messages.join(' '));
       else setErreur('Erreur réseau.');
     }
-  }, [campagneId]);
+  }, []);
 
   const chargerParticipation = useCallback(async () => {
     if (campagneId === null) return;
@@ -61,10 +61,10 @@ export function Participation() {
   const uesQuorumAtteint = participations.filter((p) => p.repondants >= 5).length;
 
   return (
-    <div className="space-y-5 max-w-6xl mx-auto animate-fade-in pb-6">
+    <div className="space-y-4 sm:space-y-5 max-w-6xl mx-auto animate-fade-in pb-6">
       <PageHeader
         title="Suivi de la participation"
-        description="Suivez en direct le taux de réponse des étudiants par unité d'enseignement."
+        description="Taux de réponse en direct par unité d'enseignement."
         breadcrumbs={[
           { label: 'Accueil', href: '/' },
           { label: 'Participation' },
@@ -89,12 +89,9 @@ export function Participation() {
         </Alert>
       )}
 
-      {/* SÉLECTEUR DE CAMPAGNE EN 1 CLIC */}
+      {/* SÉLECTEUR DE CAMPAGNE */}
       {campagnes.length > 0 && (
-        <div className="bg-white border border-enp-border p-4 flex flex-wrap items-center gap-2 shadow-xs">
-          <span className="text-xs font-bold uppercase tracking-wider text-enp-blue-deep mr-2">
-            Campagne :
-          </span>
+        <div className="bg-white border border-enp-border p-3 flex items-center gap-1.5 overflow-x-auto">
           {campagnes.map((c) => {
             const active = c.id === campagneId;
             return (
@@ -102,7 +99,7 @@ export function Participation() {
                 key={c.id}
                 type="button"
                 onClick={() => setCampagneId(c.id)}
-                className={`px-3.5 py-2 text-xs font-semibold border transition-colors ${
+                className={`px-3 py-2 text-xs font-semibold border transition-colors whitespace-nowrap shrink-0 min-h-[38px] ${
                   active
                     ? 'bg-enp-blue-deep text-white border-enp-blue-deep'
                     : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40'
@@ -116,43 +113,93 @@ export function Participation() {
       )}
 
       {chargement ? (
-        <div className="bg-white border border-enp-border p-12 text-center text-sm text-enp-gray-medium">
-          Chargement des indicateurs de participation…
+        <div className="bg-white border border-enp-border p-10 text-center text-sm text-enp-gray-medium">
+          Chargement des indicateurs…
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-            <StatCard
-              title="Taux global"
-              value={`${tauxGlobal}%`}
-              icon={<Activity className="w-5 h-5 text-enp-blue-primary" />}
-              description={`${totalRepondants} suffrages sur ${totalInscrits} inscrits`}
-              variant="primary"
-            />
-            <StatCard
-              title="Répondants"
-              value={totalRepondants}
-              icon={<Users className="w-5 h-5 text-enp-blue-deep" />}
-              description={`Sur ${participations.length} UE suivies`}
-            />
-            <StatCard
-              title="Seuil d'anonymat (≥ 5)"
-              value={`${uesQuorumAtteint} / ${participations.length}`}
-              icon={<CheckCircle2 className="w-5 h-5 text-enp-green-valid" />}
-              description="UE exploitables au dépouillement"
-              variant="success"
-            />
+          {/* SYNTHÈSE UNIFIÉE */}
+          <div className="bg-white border border-enp-border grid grid-cols-3 divide-x divide-enp-border">
+            <div className="p-3 sm:p-4">
+              <p className="text-xs text-enp-gray-medium">Taux global</p>
+              <p className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-enp-blue-primary mt-0.5">
+                {tauxGlobal}%
+              </p>
+              <p className="hidden sm:block text-xs text-enp-gray-medium mt-0.5 tabular-nums">
+                {totalRepondants} sur {totalInscrits} inscrits
+              </p>
+            </div>
+            <div className="p-3 sm:p-4">
+              <p className="text-xs text-enp-gray-medium">Répondants</p>
+              <p className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-enp-black mt-0.5">
+                {totalRepondants}
+              </p>
+              <p className="hidden sm:block text-xs text-enp-gray-medium mt-0.5 tabular-nums">
+                {participations.length} UE suivies
+              </p>
+            </div>
+            <div className="p-3 sm:p-4">
+              <p className="text-xs text-enp-gray-medium">Quorum (≥ 5)</p>
+              <p className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-enp-green-valid mt-0.5">
+                {uesQuorumAtteint} / {participations.length}
+              </p>
+              <p className="hidden sm:block text-xs text-enp-gray-medium mt-0.5">
+                UE exploitables
+              </p>
+            </div>
           </div>
 
-          <div className="bg-white border border-enp-border shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="bg-white border border-enp-border overflow-hidden">
+            {/* VUE MOBILE NATIVE */}
+            <div className="block md:hidden divide-y divide-enp-border">
+              {trie.map((p) => {
+                const taux = p.inscrits > 0 ? Math.round((p.repondants / p.inscrits) * 100) : 0;
+                return (
+                  <div key={p.ueId} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-xs font-semibold text-enp-blue-deep">
+                          {p.code}
+                        </p>
+                        <p className="text-sm font-semibold text-enp-black leading-snug">
+                          {p.intitule}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p
+                          className={`font-mono text-sm font-bold tabular-nums ${
+                            taux >= 50 ? 'text-enp-green-valid' : 'text-enp-blue-deep'
+                          }`}
+                        >
+                          {taux}%
+                        </p>
+                        <p className="text-xs font-mono tabular-nums text-enp-gray-medium">
+                          {p.repondants} / {p.inscrits}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full bg-enp-bg overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          taux >= 50 ? 'bg-enp-green-valid' : 'bg-enp-blue-primary'
+                        }`}
+                        style={{ width: `${taux}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* VUE BUREAU */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-enp-blue-deep text-white text-xs uppercase tracking-wider">
+                  <tr className="bg-enp-bg border-b border-enp-border text-enp-gray-dark text-xs">
                     <th scope="col" className="text-left px-4 py-3 font-semibold">Code</th>
                     <th scope="col" className="text-left px-4 py-3 font-semibold">Unité d'Enseignement</th>
-                    <th scope="col" className="text-center px-4 py-3 font-semibold">Inscrits</th>
-                    <th scope="col" className="text-center px-4 py-3 font-semibold">Répondants</th>
+                    <th scope="col" className="text-right px-4 py-3 font-semibold">Inscrits</th>
+                    <th scope="col" className="text-right px-4 py-3 font-semibold">Répondants</th>
                     <th scope="col" className="text-left px-4 py-3 font-semibold w-56">Progression</th>
                   </tr>
                 </thead>
@@ -161,19 +208,19 @@ export function Participation() {
                     const taux = p.inscrits > 0 ? Math.round((p.repondants / p.inscrits) * 100) : 0;
                     return (
                       <tr key={p.ueId} className="hover:bg-enp-blue-ice/20 transition-colors">
-                        <td className="px-4 py-3">
-                          <span className="font-mono text-xs font-bold bg-enp-blue-light text-enp-blue-deep border border-enp-blue-primary/20 px-2 py-0.5">
-                            {p.code}
-                          </span>
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-enp-blue-deep whitespace-nowrap">
+                          {p.code}
                         </td>
                         <td className="px-4 py-3 font-semibold text-enp-black">{p.intitule}</td>
-                        <td className="px-4 py-3 text-center text-enp-gray-medium">{p.inscrits}</td>
-                        <td className="px-4 py-3 text-center font-bold text-enp-black">
+                        <td className="px-4 py-3 text-right font-mono tabular-nums text-enp-gray-medium">
+                          {p.inscrits}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold text-enp-black">
                           {p.repondants}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="h-2 flex-1 bg-enp-bg border border-enp-border overflow-hidden">
+                          <div className="flex items-center gap-3">
+                            <div className="h-1.5 flex-1 bg-enp-bg overflow-hidden">
                               <div
                                 className={`h-full transition-all duration-300 ${
                                   taux >= 50 ? 'bg-enp-green-valid' : 'bg-enp-blue-primary'
@@ -181,7 +228,13 @@ export function Participation() {
                                 style={{ width: `${taux}%` }}
                               />
                             </div>
-                            <Badge variant={taux >= 50 ? 'success' : 'outline'}>{taux}%</Badge>
+                            <span
+                              className={`font-mono text-xs font-semibold tabular-nums w-10 text-right ${
+                                taux >= 50 ? 'text-enp-green-valid' : 'text-enp-blue-deep'
+                              }`}
+                            >
+                              {taux}%
+                            </span>
                           </div>
                         </td>
                       </tr>

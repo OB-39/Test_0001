@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BarChart3, AlertCircle, ArrowRight, ShieldCheck, Search, Users, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Search } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import type { ResultatUeResume } from '@/api/types';
 import { useAuth } from '@/auth/AuthContext';

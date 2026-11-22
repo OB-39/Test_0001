@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Smartphone, Download, Share, PlusSquare, X, CheckCircle2 } from 'lucide-react';
+import { Smartphone, Download, Share, PlusSquare, X } from 'lucide-react';
 import { usePwaInstall } from './usePwaInstall';
 import { Button } from '@/components/ui';
 
 export function PwaInstallBanner() {
-  const { peutInstaller, estInstalle, estIos, installer, guideIosOuvert, fermerGuideIos } =
+  const { peutInstaller, estInstalle, installer, guideIosOuvert, fermerGuideIos } =
     usePwaInstall();
   const [banniereMasquee, setBanniereMasquee] = useState(false);
 

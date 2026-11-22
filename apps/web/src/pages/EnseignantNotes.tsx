@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   BookOpen,
-  ClipboardList,
   Download,
   Plus,
   Save,
   Table as TableIcon,
+  TrendingUp,
 } from 'lucide-react';
 import {
   CartesianGrid,
@@ -19,7 +19,7 @@ import {
 import { api, ApiError } from '@/api';
 import { useConfirmation } from '@/components/useConfirmation';
 import type { CahierNotes, CoursDossier } from '@/api/types';
-import { PageHeader, Button, Alert, Badge } from '@/components/ui';
+import { PageHeader, Button, Alert } from '@/components/ui';
 
 const PRESETS_EVAL = ['Devoir 1', 'Devoir 2'];
 
@@ -113,8 +113,8 @@ export function EnseignantNotes() {
     if (courseId === null || !libelle.trim()) return;
     const confirme = await confirmer({
       title: 'Créer une colonne d’évaluation ?',
-      message: `La colonne « ${libelle.trim()} » sera ajoutée au cahier de notes de cette UE et apparaîtra dans le suivi des étudiants.`,
-      confirmLabel: 'Créer la colonne',
+      message: `La colonne « ${libelle.trim()} » sera ajoutée au cahier de notes de cette UE.`,
+      confirmLabel: 'Créer',
       variant: 'warning',
     });
     if (!confirme) return;
@@ -127,7 +127,7 @@ export function EnseignantNotes() {
       });
       setLibelle('');
       setAfficherCreation(false);
-      setMessage(`L'évaluation « ${creee.libelle} » a été créée.`);
+      setMessage(`Évaluation « ${creee.libelle} » créée.`);
       const data = await api.dossierCahierNotes(courseId);
       setCahier(data);
       setEvalActiveId(creee.id);
@@ -158,8 +158,8 @@ export function EnseignantNotes() {
     if (!evaluation) return;
     const confirme = await confirmer({
       title: 'Enregistrer les notes ?',
-      message: `Les notes de « ${evaluation.libelle} » seront mises à jour pour les ${cahier.etudiants.length} étudiants de cette UE. Les étudiants pourront les consulter dans leur dossier académique.`,
-      confirmLabel: 'Enregistrer les notes',
+      message: `Les notes de « ${evaluation.libelle} » seront mises à jour pour les ${cahier.etudiants.length} étudiants.`,
+      confirmLabel: 'Enregistrer',
       variant: 'warning',
     });
     if (!confirme) return;
@@ -174,7 +174,7 @@ export function EnseignantNotes() {
           note: evaluation.notes[etudiant.id] ?? null,
         })),
       );
-      setMessage(`Les notes de « ${evaluation.libelle} » ont été enregistrées.`);
+      setMessage(`Notes de « ${evaluation.libelle} » enregistrées.`);
     } catch (err) {
       setErreur(
         err instanceof ApiError ? err.messages.join(' ') : 'Impossible d’enregistrer les notes.',
@@ -224,10 +224,9 @@ export function EnseignantNotes() {
   }, [cahier, evaluationActive]);
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-6xl mx-auto pb-6">
+    <div className="space-y-4 animate-fade-in max-w-6xl mx-auto pb-6">
       <PageHeader
         title="Saisie des notes"
-        description="Créez autant de devoirs que nécessaire et suivez la progression de vos étudiants."
         breadcrumbs={[
           { label: 'Accueil', href: '/' },
           { label: 'Saisie des notes' },
@@ -236,18 +235,19 @@ export function EnseignantNotes() {
           cours.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
               {cahier && cahier.evaluations.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  {(['pdf', 'xlsx', 'docx'] as const).map((format) => (
-                    <Button
+                <div className="inline-flex border border-enp-border bg-white">
+                  {(['pdf', 'xlsx', 'docx'] as const).map((format, idx) => (
+                    <button
                       key={format}
                       type="button"
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<Download className="w-3.5 h-3.5" />}
                       onClick={() => void exporterNotes(format)}
+                      className={`px-2.5 py-1.5 text-xs font-semibold text-enp-blue-deep hover:bg-enp-blue-ice transition-colors inline-flex items-center gap-1 min-h-[38px] ${
+                        idx < 2 ? 'border-r border-enp-border' : ''
+                      }`}
                     >
-                      {format.toUpperCase()}
-                    </Button>
+                      {idx === 0 && <Download className="w-3.5 h-3.5" />}
+                      <span>{format.toUpperCase()}</span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -257,8 +257,9 @@ export function EnseignantNotes() {
                 size="sm"
                 leftIcon={<Plus className="w-4 h-4" />}
                 onClick={() => setAfficherCreation((v) => !v)}
+                className="min-h-[38px]"
               >
-                {afficherCreation ? 'Fermer' : 'Nouvelle évaluation'}
+                {afficherCreation ? 'Fermer' : 'Nouveau devoir'}
               </Button>
             </div>
           ) : undefined
@@ -279,7 +280,7 @@ export function EnseignantNotes() {
 
       {chargement ? (
         <div className="bg-white border border-enp-border p-10 text-center text-sm text-enp-gray-medium">
-          Chargement de vos unités d’enseignement…
+          Chargement de vos unités d’enseignement...
         </div>
       ) : cours.length === 0 ? (
         <div className="bg-white border border-enp-border p-10 text-center space-y-2">
@@ -291,12 +292,9 @@ export function EnseignantNotes() {
         </div>
       ) : (
         <>
-          {/* 1. SÉLECTION D'UE EN 1 CLIC */}
-          <div className="bg-white border border-enp-border p-4 space-y-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-enp-blue-deep block">
-              1. Unité d'enseignement
-            </span>
-            <div className="flex flex-wrap gap-2">
+          {/* Selecteur unifie UE + Evaluations */}
+          <div className="bg-white border border-enp-border divide-y divide-enp-border">
+            <div className="p-3 flex items-center gap-1.5 overflow-x-auto">
               {cours.map((ue) => {
                 const actif = ue.id === courseId;
                 return (
@@ -307,44 +305,86 @@ export function EnseignantNotes() {
                       setCourseId(ue.id);
                       setMessage(null);
                     }}
-                    className={`px-3.5 py-2 text-xs sm:text-sm font-semibold border transition-colors text-left flex items-center gap-2 ${
+                    className={`px-3 py-1.5 text-xs font-semibold border whitespace-nowrap transition-colors flex items-center gap-1.5 min-h-[36px] ${
                       actif
-                        ? 'bg-enp-blue-deep text-white border-enp-blue-deep shadow-xs'
-                        : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/50'
+                        ? 'bg-enp-blue-deep text-white border-enp-blue-deep'
+                        : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40'
                     }`}
                   >
-                    <span
-                      className={`font-mono text-xs px-1.5 py-0.5 font-bold ${
-                        actif ? 'bg-white/20 text-white' : 'bg-enp-blue-light text-enp-blue-deep'
-                      }`}
-                    >
-                      {ue.code}
+                    <span className="font-mono font-bold">{ue.code}</span>
+                    <span className="truncate max-w-[160px] sm:max-w-[220px] font-normal opacity-90">
+                      {ue.intitule}
                     </span>
-                    <span className="truncate max-w-[240px]">{ue.intitule}</span>
                   </button>
                 );
               })}
             </div>
+
+            {cahier && cahier.evaluations.length > 0 && (
+              <div className="p-3 bg-enp-bg/60 flex items-center gap-1.5 overflow-x-auto">
+                {cahier.evaluations.map((ev) => {
+                  const actif = evalActiveId === ev.id;
+                  const nbNotes = Object.values(ev.notes).filter((v) => v !== null).length;
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => setEvalActiveId(ev.id)}
+                      className={`px-2.5 py-1.5 text-xs font-semibold border whitespace-nowrap transition-colors flex items-center gap-2 min-h-[36px] ${
+                        actif
+                          ? 'bg-enp-blue-primary text-white border-enp-blue-primary'
+                          : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40'
+                      }`}
+                    >
+                      <span>{ev.libelle}</span>
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.5 font-bold tabular-nums ${
+                          actif
+                            ? 'bg-white/20 text-white'
+                            : 'bg-enp-blue-light text-enp-blue-deep'
+                        }`}
+                      >
+                        {nbNotes}/{cahier.etudiants.length}
+                      </span>
+                    </button>
+                  );
+                })}
+
+                {cahier.evaluations.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setEvalActiveId('synthese')}
+                    className={`ml-auto px-2.5 py-1.5 text-xs font-semibold border whitespace-nowrap transition-colors inline-flex items-center gap-1.5 min-h-[36px] ${
+                      evalActiveId === 'synthese'
+                        ? 'bg-enp-blue-deep text-white border-enp-blue-deep'
+                        : 'bg-white text-enp-blue-deep border-enp-border hover:bg-enp-blue-ice/40'
+                    }`}
+                  >
+                    <TableIcon className="w-3.5 h-3.5" />
+                    <span>Synthèse</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* 2. CRÉATION RAPIDE D'UNE COLONNE D'ÉVALUATION */}
+          {/* Creation rapide de devoir */}
           {afficherCreation && (
             <form
               onSubmit={(event) => void creerEvaluation(event)}
-              className="bg-enp-blue-ice/40 border border-enp-blue-primary/30 p-4 space-y-3 animate-fade-in"
+              className="bg-enp-blue-ice/35 border border-enp-blue-primary/30 p-3.5 sm:p-4 space-y-3 animate-fade-in"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-enp-blue-deep">
-                  Ajouter une colonne d'évaluation
+                <span className="text-xs font-bold text-enp-blue-deep">
+                  Nouvelle colonne d'évaluation
                 </span>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] text-enp-gray-medium">Modèles rapides :</span>
+                <div className="flex items-center gap-1.5">
                   {PRESETS_EVAL.map((preset) => (
                     <button
                       key={preset}
                       type="button"
                       onClick={() => setLibelle(preset)}
-                      className="text-[11px] font-semibold px-2 py-0.5 bg-white border border-enp-border text-enp-blue-deep hover:border-enp-blue-primary transition-colors"
+                      className="text-[11px] font-semibold px-2 py-1 bg-white border border-enp-border text-enp-blue-deep hover:border-enp-blue-primary"
                     >
                       {preset}
                     </button>
@@ -352,8 +392,8 @@ export function EnseignantNotes() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-3 items-end">
-                <label className="block text-xs font-bold text-enp-black">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_110px_auto] gap-2.5 items-end">
+                <label className="block text-xs font-semibold text-enp-black">
                   Intitulé
                   <input
                     required
@@ -364,7 +404,7 @@ export function EnseignantNotes() {
                     className="mt-1 block w-full border border-enp-border bg-white px-3 py-2 text-sm text-enp-black focus:border-enp-blue-primary outline-none min-h-[40px]"
                   />
                 </label>
-                <label className="block text-xs font-bold text-enp-black">
+                <label className="block text-xs font-semibold text-enp-black">
                   Barème
                   <input
                     required
@@ -378,240 +418,176 @@ export function EnseignantNotes() {
                   />
                 </label>
                 <Button type="submit" variant="primary" size="md" leftIcon={<Plus className="w-4 h-4" />}>
-                  Créer la colonne
+                  Créer
                 </Button>
               </div>
             </form>
           )}
 
-          {/* 3. ONGLETS DES ÉVALUATIONS & GRILLE DE SAISIE */}
+          {/* Contenu principal */}
           {cahier && (
             <div className="space-y-4">
               {cahier.evaluations.length === 0 ? (
                 <div className="bg-white border border-enp-border p-8 text-center text-sm text-enp-gray-medium">
-                  Aucun devoir créé pour cette UE. Utilisez le formulaire ci-dessus pour en ajouter un.
+                  Aucun devoir créé pour cette UE.
                 </div>
-              ) : (
-                <>
-                  {/* Barre d'onglets des évaluations */}
-                  <div className="bg-white border border-enp-border p-3 flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-enp-blue-deep mr-2">
-                      2. Évaluation :
-                    </span>
-                    {cahier.evaluations.map((ev) => {
-                      const actif = evalActiveId === ev.id;
-                      const nbNotes = Object.values(ev.notes).filter((v) => v !== null).length;
-                      return (
-                        <button
-                          key={ev.id}
-                          type="button"
-                          onClick={() => setEvalActiveId(ev.id)}
-                          className={`px-3 py-2 text-xs font-semibold border transition-colors flex items-center gap-2 ${
-                            actif
-                              ? 'bg-enp-blue-primary text-white border-enp-blue-primary shadow-xs'
-                              : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40'
-                          }`}
-                        >
-                          <ClipboardList className="w-3.5 h-3.5 shrink-0" />
-                          <span>{ev.libelle}</span>
-                          <span
-                            className={`text-[10px] font-mono px-1.5 py-0.5 font-bold ${
-                              actif
-                                ? 'bg-white/20 text-white'
-                                : 'bg-enp-blue-light text-enp-blue-deep'
-                            }`}
-                          >
-                            {nbNotes}/{cahier.etudiants.length}
-                          </span>
-                        </button>
-                      );
-                    })}
-
-                    {cahier.evaluations.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setEvalActiveId('synthese')}
-                        className={`ml-auto px-3 py-2 text-xs font-semibold border transition-colors flex items-center gap-1.5 ${
-                          evalActiveId === 'synthese'
-                            ? 'bg-enp-blue-deep text-white border-enp-blue-deep shadow-xs'
-                            : 'bg-enp-bg text-enp-blue-deep border-enp-border hover:bg-enp-blue-ice/40'
-                        }`}
-                      >
-                        <TableIcon className="w-3.5 h-3.5" />
-                        <span>Vue synthèse ({cahier.evaluations.length} colonnes)</span>
-                      </button>
-                    )}
+              ) : evalActiveId === 'synthese' ? (
+                /* Vue synthese toutes colonnes */
+                <section className="bg-white border border-enp-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-enp-border bg-enp-bg flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-bold text-enp-blue-deep truncate">
+                      {cahier.cours.code} · Récapitulatif ({cahier.etudiants.length} étudiants)
+                    </h2>
                   </div>
-
-                  {evalActiveId !== 'synthese' && cahier.etudiants.length > 0 && (
-                    <section className="space-y-3 border border-enp-border bg-white p-4">
-                      <label className="block max-w-xl text-xs font-bold text-enp-blue-deep">
-                        Suivre l’évolution de l’étudiant
-                        <select
-                          value={progressionStudentId ?? cahier.etudiants[0].id}
-                          onChange={(event) => setProgressionStudentId(Number(event.target.value))}
-                          className="mt-1 block w-full border border-enp-border bg-white px-3 py-2 text-sm font-normal"
-                        >
-                          {cahier.etudiants.map((etudiant) => (
-                            <option key={etudiant.id} value={etudiant.id}>
-                              {etudiant.identifiant} — {etudiant.prenom} {etudiant.nom}
-                            </option>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-enp-blue-deep text-white text-left text-xs uppercase tracking-wider">
+                          <th className="px-4 py-2.5 font-semibold">Étudiant</th>
+                          {cahier.evaluations.map((ev) => (
+                            <th key={ev.id} className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">
+                              {ev.libelle} (/{ev.bareme})
+                            </th>
                           ))}
-                        </select>
-                      </label>
-                      {progression.length > 0 ? (
-                        <div className="h-64 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={progression}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="dateLabel" hide />
-                              <YAxis domain={[0, 20]} />
-                              <Tooltip
-                                labelFormatter={(_, payload) => payload[0]?.payload.dateLabel ?? ''}
-                                formatter={(value) => [`${Number(value ?? 0).toFixed(2)} / 20`, 'Note']}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="noteSur20"
-                                name="Note sur 20"
-                                stroke="#1D4ED8"
-                                strokeWidth={2}
-                                dot
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-enp-gray-medium">
-                          Aucune note saisie pour cet étudiant.
-                        </p>
-                      )}
-                    </section>
-                  )}
-
-                  {/* VUE SYNTHÈSE (TOUTES LES COLONNES CÔTE À CÔTE) */}
-                  {evalActiveId === 'synthese' ? (
-                    <section className="bg-white border border-enp-border shadow-xs overflow-hidden">
-                      <div className="p-4 border-b border-enp-border bg-enp-bg flex items-center justify-between">
-                        <div>
-                          <h2 className="text-sm font-bold text-enp-blue-deep">
-                            Récapitulatif intégral • {cahier.cours.code} : {cahier.cours.intitule}
-                          </h2>
-                          <p className="text-xs text-enp-gray-medium">
-                            Vue comparative de toutes les notes de la promotion ({cahier.etudiants.length} étudiants)
-                          </p>
-                        </div>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm border-collapse">
-                          <thead>
-                            <tr className="bg-enp-blue-deep text-white text-left text-xs uppercase tracking-wider">
-                              <th className="px-4 py-3 font-semibold">Matricule</th>
-                              <th className="px-4 py-3 font-semibold">Étudiant</th>
-                              {cahier.evaluations.map((ev) => (
-                                <th key={ev.id} className="px-4 py-3 text-right font-semibold">
-                                  {ev.libelle} (/{ev.bareme})
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-enp-border">
-                            {cahier.etudiants.map((etudiant) => (
-                              <tr key={etudiant.id} className="hover:bg-enp-blue-ice/20">
-                                <td className="px-4 py-2.5 font-mono text-xs font-bold text-enp-blue-deep">
-                                  {etudiant.identifiant ?? '-'}
-                                </td>
-                                <td className="px-4 py-2.5 font-semibold text-enp-black">
-                                  {etudiant.prenom} {etudiant.nom}
-                                </td>
-                                {cahier.evaluations.map((ev) => {
-                                  const n = ev.notes[etudiant.id];
-                                  return (
-                                    <td
-                                      key={ev.id}
-                                      className="px-4 py-2.5 text-right font-mono font-bold"
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-enp-border">
+                        {cahier.etudiants.map((etudiant) => (
+                          <tr key={etudiant.id} className="hover:bg-enp-blue-ice/20">
+                            <td className="px-4 py-2.5">
+                              <span className="font-medium text-enp-black block">
+                                {etudiant.prenom} {etudiant.nom}
+                              </span>
+                              <span className="font-mono text-[11px] text-enp-gray-medium">
+                                {etudiant.identifiant ?? '-'}
+                              </span>
+                            </td>
+                            {cahier.evaluations.map((ev) => {
+                              const n = ev.notes[etudiant.id];
+                              return (
+                                <td
+                                  key={ev.id}
+                                  className="px-4 py-2.5 text-right font-mono font-bold tabular-nums"
+                                >
+                                  {n === null || n === undefined ? (
+                                    <span className="text-enp-gray-medium font-normal">-</span>
+                                  ) : (
+                                    <span
+                                      className={
+                                        n >= ev.bareme / 2
+                                          ? 'text-enp-blue-deep'
+                                          : 'text-enp-red-error'
+                                      }
                                     >
-                                      {n === null || n === undefined ? (
-                                        <span className="text-enp-gray-medium font-normal">-</span>
-                                      ) : (
-                                        <span
-                                          className={
-                                            n >= ev.bareme / 2
-                                              ? 'text-enp-blue-deep'
-                                              : 'text-enp-red-error'
-                                          }
-                                        >
-                                          {n}
-                                        </span>
-                                      )}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                                      {n}
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : (
+                evaluationActive && (
+                  <>
+                    {/* Feuille de saisie active */}
+                    <article className="bg-white border border-enp-border overflow-hidden">
+                      <div className="p-3.5 sm:p-4 border-b border-enp-border bg-enp-bg flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="text-sm sm:text-base font-bold text-enp-blue-deep">
+                            {evaluationActive.libelle}{' '}
+                            <span className="font-mono text-xs font-normal text-enp-gray-medium">
+                              /{evaluationActive.bareme}
+                            </span>
+                          </h2>
+                          {statsActive && (
+                            <p className="text-xs text-enp-gray-medium tabular-nums mt-0.5">
+                              {statsActive.saisies}/{statsActive.total} saisies · Moyenne{' '}
+                              <strong className="text-enp-blue-deep">
+                                {statsActive.moyenne}/{evaluationActive.bareme}
+                              </strong>
+                            </p>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          disabled={enregistrement === evaluationActive.id}
+                          isLoading={enregistrement === evaluationActive.id}
+                          leftIcon={<Save className="w-4 h-4" />}
+                          onClick={() => void enregistrerEvaluation(evaluationActive.id)}
+                          className="min-h-[38px]"
+                        >
+                          Enregistrer
+                        </Button>
                       </div>
-                    </section>
-                  ) : (
-                    /* VUE SAISIE D'UNE ÉVALUATION ACTIVE */
-                    evaluationActive && (
-                      <article className="bg-white border border-enp-border shadow-xs overflow-hidden">
-                        <div className="p-4 border-b border-enp-border bg-enp-bg flex flex-wrap items-center justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h2 className="text-base font-bold text-enp-blue-deep">
-                                {evaluationActive.libelle}
-                              </h2>
-                              <Badge variant="default">Devoir</Badge>
-                              <Badge variant="outline">Barème /{evaluationActive.bareme}</Badge>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-3 text-xs text-enp-gray-medium">
-                              {statsActive && (
-                                <>
-                                  <span>
-                                    Notes saisies :{' '}
-                                    <strong className="text-enp-black">
-                                      {statsActive.saisies}/{statsActive.total}
-                                    </strong>
-                                  </span>
-                                  <span>•</span>
-                                  <span>
-                                    Moyenne :{' '}
-                                    <strong className="text-enp-blue-deep">
-                                      {statsActive.moyenne} / {evaluationActive.bareme}
-                                    </strong>
-                                  </span>
-                                </>
-                              )}
-                            </div>
+
+                      {cahier.etudiants.length === 0 ? (
+                        <p className="p-8 text-center text-sm text-enp-gray-medium">
+                          Aucun étudiant inscrit à cette UE.
+                        </p>
+                      ) : (
+                        <>
+                          {/* Vue mobile native : saisie rapide carte par carte */}
+                          <div className="block md:hidden divide-y divide-enp-border">
+                            {cahier.etudiants.map((etudiant) => {
+                              const valeurNote = evaluationActive.notes[etudiant.id] ?? '';
+                              return (
+                                <div
+                                  key={etudiant.id}
+                                  className="px-3.5 py-2.5 flex items-center justify-between gap-3"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-enp-black truncate">
+                                      {etudiant.prenom} {etudiant.nom}
+                                    </p>
+                                    <p className="font-mono text-[11px] text-enp-gray-medium">
+                                      {etudiant.identifiant ?? '-'}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <input
+                                      aria-label={`Note de ${etudiant.prenom} ${etudiant.nom}`}
+                                      type="number"
+                                      inputMode="decimal"
+                                      min="0"
+                                      max={evaluationActive.bareme}
+                                      step="0.25"
+                                      placeholder="-"
+                                      value={valeurNote}
+                                      onChange={(event) =>
+                                        modifierNote(
+                                          evaluationActive.id,
+                                          etudiant.id,
+                                          event.target.value,
+                                        )
+                                      }
+                                      className="w-20 text-right font-mono font-bold tabular-nums border border-enp-border bg-white px-2.5 py-2 text-sm text-enp-black focus:border-enp-blue-primary outline-none min-h-[40px]"
+                                    />
+                                    <span className="text-xs font-mono text-enp-gray-medium w-7">
+                                      /{evaluationActive.bareme}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
 
-                          <Button
-                            type="button"
-                            variant="primary"
-                            size="sm"
-                            disabled={enregistrement === evaluationActive.id}
-                            isLoading={enregistrement === evaluationActive.id}
-                            leftIcon={<Save className="w-4 h-4" />}
-                            onClick={() => void enregistrerEvaluation(evaluationActive.id)}
-                          >
-                            Enregistrer les notes
-                          </Button>
-                        </div>
-
-                        {cahier.etudiants.length === 0 ? (
-                          <p className="p-8 text-center text-sm text-enp-gray-medium">
-                            Aucun étudiant inscrit à cette UE.
-                          </p>
-                        ) : (
-                          <div className="overflow-x-auto">
+                          {/* Vue desktop */}
+                          <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-sm border-collapse">
                               <thead>
                                 <tr className="bg-enp-blue-deep text-white text-left text-xs uppercase tracking-wider">
-                                  <th className="px-4 py-3 font-semibold">Matricule</th>
-                                  <th className="px-4 py-3 font-semibold">Étudiant</th>
-                                  <th className="w-48 px-4 py-3 text-right font-semibold">
+                                  <th className="px-4 py-2.5 font-semibold">Matricule</th>
+                                  <th className="px-4 py-2.5 font-semibold">Étudiant</th>
+                                  <th className="w-44 px-4 py-2.5 text-right font-semibold">
                                     Note / {evaluationActive.bareme}
                                   </th>
                                 </tr>
@@ -624,10 +600,10 @@ export function EnseignantNotes() {
                                       key={etudiant.id}
                                       className="hover:bg-enp-blue-ice/20 transition-colors"
                                     >
-                                      <td className="px-4 py-2.5 font-mono text-xs font-bold text-enp-blue-deep">
+                                      <td className="px-4 py-2.5 font-mono text-xs font-semibold text-enp-blue-deep">
                                         {etudiant.identifiant ?? '-'}
                                       </td>
-                                      <td className="px-4 py-2.5 font-semibold text-enp-black">
+                                      <td className="px-4 py-2.5 font-medium text-enp-black">
                                         {etudiant.prenom} {etudiant.nom}
                                       </td>
                                       <td className="px-4 py-2 text-right">
@@ -646,7 +622,7 @@ export function EnseignantNotes() {
                                               event.target.value,
                                             )
                                           }
-                                          className="w-32 ml-auto block text-right font-mono font-bold border border-enp-border bg-white px-3 py-1.5 text-sm text-enp-black focus:border-enp-blue-primary focus:ring-1 focus:ring-enp-blue-primary outline-none disabled:bg-enp-bg disabled:text-enp-gray-medium"
+                                          className="w-28 ml-auto block text-right font-mono font-bold tabular-nums border border-enp-border bg-white px-3 py-1.5 text-sm text-enp-black focus:border-enp-blue-primary outline-none"
                                         />
                                       </td>
                                     </tr>
@@ -655,11 +631,69 @@ export function EnseignantNotes() {
                               </tbody>
                             </table>
                           </div>
-                        )}
-                      </article>
-                    )
-                  )}
-                </>
+                        </>
+                      )}
+                    </article>
+
+                    {/* Courbe d'evolution repliee par defaut pour privilegier la saisie */}
+                    {cahier.etudiants.length > 0 && cahier.evaluations.length > 1 && (
+                      <details className="bg-white border border-enp-border">
+                        <summary className="px-4 py-3 text-xs font-semibold text-enp-blue-deep cursor-pointer flex items-center gap-2 select-none">
+                          <TrendingUp className="w-4 h-4 text-enp-blue-primary" />
+                          <span>Courbe d'évolution par étudiant</span>
+                        </summary>
+                        <div className="px-4 pb-4 pt-2 border-t border-enp-border space-y-3">
+                          <select
+                            aria-label="Choisir un étudiant"
+                            value={progressionStudentId ?? cahier.etudiants[0].id}
+                            onChange={(event) =>
+                              setProgressionStudentId(Number(event.target.value))
+                            }
+                            className="block w-full max-w-md border border-enp-border bg-white px-3 py-2 text-xs text-enp-black min-h-[38px]"
+                          >
+                            {cahier.etudiants.map((etudiant) => (
+                              <option key={etudiant.id} value={etudiant.id}>
+                                {etudiant.identifiant} · {etudiant.prenom} {etudiant.nom}
+                              </option>
+                            ))}
+                          </select>
+                          {progression.length > 0 ? (
+                            <div className="h-52 w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={progression}>
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="dateLabel" hide />
+                                  <YAxis domain={[0, 20]} />
+                                  <Tooltip
+                                    labelFormatter={(_, payload) =>
+                                      payload[0]?.payload.dateLabel ?? ''
+                                    }
+                                    formatter={(value) => [
+                                      `${Number(value ?? 0).toFixed(2)} / 20`,
+                                      'Note',
+                                    ]}
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey="noteSur20"
+                                    name="Note / 20"
+                                    stroke="#1D4ED8"
+                                    strokeWidth={2}
+                                    dot
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-enp-gray-medium">
+                              Aucune note saisie pour cet étudiant.
+                            </p>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                  </>
+                )
               )}
             </div>
           )}

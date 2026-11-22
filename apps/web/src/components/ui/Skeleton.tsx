@@ -15,7 +15,8 @@ export function Skeleton({
   ...props
 }: SkeletonProps) {
   const base = 'animate-pulse bg-[#E2E8F0]';
-  const variantClass = '';
+  const variantClass =
+    variant === 'circle' ? 'rounded-full' : variant === 'text' ? 'rounded-sm' : '';
 
   return (
     <div

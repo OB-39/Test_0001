@@ -4,7 +4,6 @@ import {
   Eye,
   EyeOff,
   LogIn,
-  AlertCircle,
   ShieldCheck,
   CheckCircle2,
   Lock,
@@ -113,13 +112,13 @@ export function Connexion() {
     <div className="min-h-screen flex flex-col bg-enp-bg w-full max-w-full overflow-x-hidden">
       <MockBanner />
 
-      <div className="flex-1 flex items-center justify-center p-3 sm:p-6 lg:p-12 w-full max-w-full">
+      <div className="flex-1 flex items-center justify-center p-3 sm:p-6 lg:p-10 w-full max-w-full">
         <div className="w-full max-w-5xl bg-white border border-enp-border shadow-elevated grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
           {/* ====================================================== */}
           {/* PANNEAU INSTITUTIONNEL GAUCHE (Desktop)                 */}
           {/* ====================================================== */}
-          <div className="lg:col-span-5 bg-enp-blue-deep text-white p-6 sm:p-8 lg:p-10 flex flex-col justify-between relative overflow-hidden border-b lg:border-b-0 lg:border-r border-[#00172E]">
-            {/* Arrière-plan décoratif géométrique sobre inspiré de l'ingénierie */}
+          <div className="lg:col-span-5 bg-enp-blue-deep text-white p-4 sm:p-6 lg:p-10 flex flex-col justify-between relative overflow-hidden border-b lg:border-b-0 lg:border-r border-[#00172E]">
+            {/* Arrière-plan décoratif géométrique sobre */}
             <div className="absolute inset-0 opacity-10 pointer-events-none">
               <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
                 <defs>
@@ -128,40 +127,34 @@ export function Connexion() {
                   </pattern>
                 </defs>
                 <rect width="100%" height="100%" fill="url(#grid)" />
-                <circle cx="80%" cy="20%" r="120" fill="none" stroke="#B08D35" strokeWidth="1.5" />
-                <circle cx="80%" cy="20%" r="80" fill="none" stroke="#B08D35" strokeWidth="0.8" />
-                <line x1="0" y1="0" x2="100%" y2="100%" stroke="#FFFFFF" strokeWidth="0.5" strokeDasharray="4,4" />
               </svg>
             </div>
 
             <div className="relative z-10 space-y-4 lg:space-y-6">
-              {/* En haut : Logo officiel de l'ENP grand format (seul élément visible sur mobile) */}
-              <div className="flex items-center justify-center lg:justify-start py-2 lg:py-0 lg:pb-3 lg:border-b lg:border-white/10">
+              <div className="flex items-center justify-center lg:justify-start py-1 lg:py-0 lg:pb-3 lg:border-b lg:border-white/10">
                 <img
                   src="/logo-enp-white.png"
                   alt="Logo officiel École Nationale Polytechnique"
-                  className="h-20 sm:h-24 lg:h-16 w-auto max-w-[280px] sm:max-w-[340px] object-contain drop-shadow-sm transition-all"
+                  className="h-14 sm:h-20 lg:h-16 w-auto max-w-[240px] sm:max-w-[300px] object-contain"
                 />
               </div>
 
-              {/* Présentation institutionnelle (Desktop uniquement : masquée sur mobile) */}
               <div className="hidden lg:block space-y-2">
-                <h2 className="text-lg sm:text-2xl font-bold font-sans text-white tracking-tight leading-snug">
+                <h2 className="text-xl font-bold font-sans text-white tracking-tight leading-snug">
                   École Nationale Polytechnique
                 </h2>
-                <div className="w-12 h-1 bg-enp-gold" />
+                <div className="w-10 h-0.5 bg-enp-gold" />
               </div>
 
-              {/* Présentation sobre et épurée (Desktop) */}
-              <div className="hidden lg:block space-y-4 pt-2">
+              <div className="hidden lg:block space-y-4 pt-1">
                 <p className="text-sm text-slate-300 leading-relaxed font-sans">
-                  Portail officiel dédié à l'évaluation des enseignements, au cahier de texte et au suivi des présences et des notes.
+                  Portail officiel d'évaluation des enseignements, cahier de texte, présences et notes.
                 </p>
 
                 <div className="space-y-2 pt-3 border-t border-white/10 text-xs font-sans text-slate-200">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-enp-gold shrink-0" />
-                    <span>Évaluations anonymes et sécurisées</span>
+                    <span>Évaluations anonymes</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-enp-green-valid shrink-0" />
@@ -169,13 +162,12 @@ export function Connexion() {
                   </div>
                   <div className="flex items-center gap-2">
                     <GraduationCap className="w-4 h-4 text-sky-300 shrink-0" />
-                    <span>Suivi des présences et des notes</span>
+                    <span>Émargement QR et relevés</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Pied du panneau institutionnel : Armoiries de la République Togolaise en bas (Desktop) */}
             <div className="hidden lg:flex relative z-10 pt-6 mt-6 border-t border-white/10 items-center gap-3">
               <img
                 src="/armoiries-togo.svg"
@@ -192,19 +184,16 @@ export function Connexion() {
           {/* ====================================================== */}
           {/* FORMULAIRE DE CONNEXION DROITE                          */}
           {/* ====================================================== */}
-          <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-between bg-white">
+          <div className="lg:col-span-7 p-4 sm:p-8 lg:p-10 flex flex-col justify-between bg-white">
             <div>
-              <div className="mb-6">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-enp-blue-primary block mb-1">
-                  Accès Institutionnel Sécurisé
-                </span>
-                <h1 className="text-2xl font-bold text-enp-black tracking-tight">
-                  {challengeMfa ? 'Vérification en deux étapes (MFA)' : 'Connexion à votre espace'}
+              <div className="mb-5">
+                <h1 className="text-xl sm:text-2xl font-bold text-enp-black tracking-tight">
+                  {challengeMfa ? 'Vérification en deux étapes' : 'Connexion'}
                 </h1>
                 <p className="text-xs sm:text-sm text-enp-gray-medium mt-1">
                   {challengeMfa
-                    ? 'Un code de confirmation temporaire vous a été transmis.'
-                    : 'Saisissez votre matricule ou votre e-mail officiel pour vous authentifier.'}
+                    ? 'Saisissez le code de confirmation temporaire.'
+                    : 'Matricule ou e-mail officiel ENP.'}
                 </p>
               </div>
 

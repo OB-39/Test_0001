@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle, EyeOff, MessageSquare, ShieldCheck } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import type { CampagneCommentaire, CommentaireAModerer } from '@/api/types';
 import { useAuth } from '@/auth/AuthContext';
 import { useConfirmation } from '@/components/useConfirmation';
-import { PageHeader, Button, Alert, Badge, InfoBubble } from '@/components/ui';
+import { PageHeader, Button, Alert, Badge } from '@/components/ui';
 
 const STATUT_TABS: { valeur: string; libelle: string }[] = [
   { valeur: 'a_moderer', libelle: 'À modérer' },
@@ -12,8 +12,6 @@ const STATUT_TABS: { valeur: string; libelle: string }[] = [
   { valeur: 'masque', libelle: 'Masqués' },
   { valeur: '', libelle: 'Tous' },
 ];
-
-let ordreSession: (string | number)[] | null = null;
 
 function melanger<T>(arr: T[]): T[] {
   const out = [...arr];
@@ -35,6 +33,7 @@ export function ScolariteModeration() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCoursId, setEnCoursId] = useState<string | number | null>(null);
+  const ordreSessionRef = useRef<(string | number)[] | null>(null);
 
   const chargerCampagnes = useCallback(async () => {
     setErreur(null);
@@ -61,10 +60,10 @@ export function ScolariteModeration() {
     setErreur(null);
     try {
       const cs = await api.scolariteCommentaires(campagneId, statut || undefined);
-      if (!ordreSession || cs.length !== commentaires.length) {
-        ordreSession = melanger(cs.map((c) => c.id));
+      if (!ordreSessionRef.current || cs.length !== ordreSessionRef.current.length) {
+        ordreSessionRef.current = melanger(cs.map((c) => c.id));
       }
-      const ids = ordreSession ?? [];
+      const ids = ordreSessionRef.current;
       const tries = ids
         .map((id) => cs.find((c) => c.id === id))
         .filter((c): c is CommentaireAModerer => !!c);
@@ -75,16 +74,16 @@ export function ScolariteModeration() {
     } finally {
       setChargement(false);
     }
-  }, [campagneId, statut, commentaires.length]);
+  }, [campagneId, statut]);
 
   useEffect(() => {
     void chargerCampagnes();
   }, [chargerCampagnes]);
 
   useEffect(() => {
-    ordreSession = null;
+    ordreSessionRef.current = null;
     void chargerCommentaires();
-  }, [campagneId, statut]);
+  }, [chargerCommentaires]);
 
   async function moderer(id: string | number, decision: 'valide' | 'masque') {
     const confirme = await confirmer({
@@ -115,35 +114,18 @@ export function ScolariteModeration() {
   }
 
   return (
-    <div className="space-y-5 max-w-5xl mx-auto animate-fade-in pb-6">
+    <div className="space-y-4 sm:space-y-5 max-w-5xl mx-auto animate-fade-in pb-6">
       <PageHeader
-        title={lectureSeule ? 'Commentaires libres des campagnes' : 'Modération des avis étudiants'}
+        title={lectureSeule ? 'Commentaires des campagnes' : 'Modération des avis'}
         description={
           lectureSeule
-            ? 'Consultation en lecture seule des avis qualitatifs déposés lors des campagnes.'
-            : 'Validez ou masquez les commentaires qualitatifs en 1 clic avant leur transmission aux enseignants.'
+            ? 'Consultation en lecture seule des commentaires qualitatifs.'
+            : 'Validez ou masquez tout avis identifiant ou inapproprié avant restitution.'
         }
         breadcrumbs={[
           { label: 'Accueil', href: '/' },
           { label: lectureSeule ? 'Commentaires' : 'Modération' },
         ]}
-        badge={
-          !lectureSeule ? (
-            <InfoBubble
-              triggerVariant="pill"
-              triggerLabel="Règles de modération"
-              title="Charte de modération déontologique"
-              badge="PROTECTION DE L'ANONYMAT"
-              icon="shield"
-              duration={7000}
-              content={
-                <p className="text-xs leading-relaxed">
-                  Masquez tout commentaire contenant un élément susceptible d'identifier un étudiant ou comportant des propos injurieux. Un commentaire masqué n'est jamais transmis à l'enseignant.
-                </p>
-              }
-            />
-          ) : undefined
-        }
       />
 
       {erreur && (
@@ -152,15 +134,15 @@ export function ScolariteModeration() {
         </Alert>
       )}
 
-      {/* BARRE DE FILTRES EN 1 CLIC */}
-      <div className="bg-white border border-enp-border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-        <div className="flex flex-wrap items-center gap-1.5">
+      {/* BARRE DE FILTRES */}
+      <div className="bg-white border border-enp-border p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:pb-0 -mx-1 px-1">
           {STATUT_TABS.map((t) => (
             <button
               key={t.valeur || 'tous'}
               type="button"
               onClick={() => setStatut(t.valeur)}
-              className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
+              className={`px-3 py-2 text-xs font-semibold border transition-colors whitespace-nowrap shrink-0 min-h-[38px] ${
                 statut === t.valeur
                   ? 'bg-enp-blue-deep text-white border-enp-blue-deep'
                   : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40'
@@ -171,15 +153,15 @@ export function ScolariteModeration() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <label htmlFor="campagne-mod" className="text-xs font-bold text-enp-blue-deep whitespace-nowrap">
-            Campagne :
+        <div className="flex items-center gap-2 min-w-0">
+          <label htmlFor="campagne-mod" className="sr-only">
+            Campagne
           </label>
           <select
             id="campagne-mod"
             value={campagneId}
             onChange={(e) => setCampagneId(e.target.value ? Number(e.target.value) : '')}
-            className="border border-enp-border px-3 py-1.5 text-xs sm:text-sm font-semibold text-enp-black bg-white focus:border-enp-blue-primary outline-none min-h-[36px]"
+            className="w-full sm:w-auto sm:max-w-[260px] border border-enp-border px-3 py-2 text-xs sm:text-sm font-medium text-enp-black bg-white focus:border-enp-blue-primary outline-none min-h-[40px]"
           >
             {campagnes.length === 0 && <option value="">Aucune campagne</option>}
             {campagnes.map((c) => (
@@ -192,21 +174,21 @@ export function ScolariteModeration() {
       </div>
 
       {!chargement && !erreur && campagnes.length === 0 ? (
-        <div className="bg-white border border-enp-border p-10 text-center space-y-2 shadow-xs">
-          <ShieldCheck className="w-10 h-10 text-enp-gray-medium mx-auto opacity-40" />
-          <p className="text-sm font-bold text-enp-blue-deep">Aucune campagne à modérer</p>
+        <div className="bg-white border border-enp-border p-10 text-center space-y-2">
+          <ShieldCheck className="w-8 h-8 text-enp-gray-medium mx-auto opacity-40" />
+          <p className="text-sm font-semibold text-enp-blue-deep">Aucune campagne à modérer</p>
           <p className="text-xs text-enp-gray-medium">
-            La modération est ouverte après la clôture d’une campagne d’évaluation.
+            La modération s’ouvre après la clôture d’une campagne d’évaluation.
           </p>
         </div>
       ) : chargement ? (
-        <div className="bg-white border border-enp-border p-12 text-center text-sm text-enp-gray-medium">
+        <div className="bg-white border border-enp-border p-10 text-center text-sm text-enp-gray-medium">
           Chargement des commentaires…
         </div>
       ) : commentaires.length === 0 ? (
-        <div className="bg-white border border-enp-border p-10 text-center space-y-2 shadow-xs">
-          <MessageSquare className="w-10 h-10 text-enp-green-valid mx-auto opacity-60" />
-          <p className="text-sm font-bold text-enp-blue-deep">Aucun commentaire dans cette vue</p>
+        <div className="bg-white border border-enp-border p-10 text-center space-y-2">
+          <MessageSquare className="w-8 h-8 text-enp-green-valid mx-auto opacity-60" />
+          <p className="text-sm font-semibold text-enp-blue-deep">Aucun commentaire dans cette vue</p>
           <p className="text-xs text-enp-gray-medium">
             {statut === 'a_moderer'
               ? 'Tous les commentaires de cette campagne ont été traités.'
@@ -214,23 +196,35 @@ export function ScolariteModeration() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="bg-white border border-enp-border divide-y divide-enp-border">
           {commentaires.map((c) => (
             <article
               key={c.id}
-              className="bg-white border border-enp-border p-4 sm:p-5 space-y-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3.5"
             >
               <div className="space-y-2 flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs font-bold bg-enp-blue-light text-enp-blue-deep border border-enp-blue-primary/20 px-2 py-0.5">
-                    {c.ueCode}
-                  </span>
-                  <span className="text-xs sm:text-sm font-bold text-enp-black truncate">
-                    {c.ueIntitule}
-                  </span>
-                  <Badge variant={c.type === 'points_forts' ? 'success' : 'warning'}>
-                    {c.type === 'points_forts' ? 'Points forts' : 'Axes à améliorer'}
-                  </Badge>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-enp-gray-medium flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <span className="font-mono font-semibold text-enp-blue-deep">
+                        {c.ueCode}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-medium text-enp-black truncate">
+                        {c.ueIntitule}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span
+                        className={
+                          c.type === 'points_forts'
+                            ? 'text-enp-green-valid font-medium'
+                            : 'text-amber-700 font-medium'
+                        }
+                      >
+                        {c.type === 'points_forts' ? 'Points forts' : 'Axes à améliorer'}
+                      </span>
+                    </p>
+                  </div>
                   <Badge
                     variant={
                       c.statut === 'a_moderer'
@@ -239,6 +233,7 @@ export function ScolariteModeration() {
                           ? 'primary'
                           : 'danger'
                     }
+                    className="shrink-0"
                   >
                     {c.statut === 'a_moderer'
                       ? 'À modérer'
@@ -248,18 +243,19 @@ export function ScolariteModeration() {
                   </Badge>
                 </div>
 
-                <p className="text-sm text-enp-black leading-relaxed bg-enp-bg border border-enp-border p-3">
+                <p className="text-sm text-enp-black leading-relaxed bg-enp-bg/60 border border-enp-border/70 px-3.5 py-2.5">
                   {c.texte}
                 </p>
               </div>
 
               {!lectureSeule && (
-                <div className="flex sm:flex-col gap-2 shrink-0">
+                <div className="flex sm:flex-col gap-2 shrink-0 sm:pt-5">
                   {c.statut !== 'valide' && (
                     <Button
                       type="button"
                       variant="success"
                       size="sm"
+                      className="flex-1 sm:flex-initial min-h-[40px]"
                       disabled={enCoursId === c.id}
                       isLoading={enCoursId === c.id}
                       leftIcon={<CheckCircle className="w-4 h-4" />}
@@ -273,6 +269,7 @@ export function ScolariteModeration() {
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="flex-1 sm:flex-initial min-h-[40px]"
                       disabled={enCoursId === c.id}
                       leftIcon={<EyeOff className="w-4 h-4 text-enp-red-error" />}
                       onClick={() => void moderer(c.id, 'masque')}

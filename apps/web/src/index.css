@@ -126,6 +126,57 @@ input[type="radio"] {
   background: #6b7280;
 }
 
+/* Animations dediees a l'emargement par QR Code dynamique tournant */
+@keyframes enpQrPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(176, 141, 53, 0.55);
+    transform: scale(0.985);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgba(176, 141, 53, 0);
+    transform: scale(1.01);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(176, 141, 53, 0);
+    transform: scale(1);
+  }
+}
+
+.enp-qr-pulse {
+  animation: enpQrPulse 0.55s ease-out;
+}
+
+@keyframes enpScanLine {
+  0% {
+    top: 6%;
+  }
+  50% {
+    top: 90%;
+  }
+  100% {
+    top: 6%;
+  }
+}
+
+.enp-scan-line {
+  animation: enpScanLine 2.1s ease-in-out infinite;
+}
+
+@keyframes enpArrivalPop {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.enp-arrival-pop {
+  animation: enpArrivalPop 0.35s ease-out;
+}
+
 /* ---------------------------------------------------------------- */
 /*  Styles d'impression officiels (fiches de résultats et rapports) */
 /* ---------------------------------------------------------------- */

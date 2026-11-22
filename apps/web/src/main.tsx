@@ -4,6 +4,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { registerServiceWorker } from './pwa/registerServiceWorker';
+import { installExtensionErrorGuard } from './utils/extensionGuard';
+
+installExtensionErrorGuard();
 
 interface FrontendErrorBoundaryState {
   error: Error | null;

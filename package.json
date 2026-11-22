@@ -1,0 +1,22 @@
+{
+  "name": "enp-portail-academique",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/web",
+    "preview": "npm run preview --workspace=apps/web",
+    "typecheck": "npm run typecheck --workspace=apps/web"
+  },
+  "overrides": {
+    "minimatch": "^11.0.3"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0",
+    "qrcode.react": "^4.2.0"
+  }
+}

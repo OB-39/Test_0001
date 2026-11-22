@@ -66,8 +66,8 @@ export function ScolariteCampagnes() {
       ]);
       setCampagnes(cs);
       setDepartements(ds);
-      if (ds.length > 0 && form.departmentId === 0) {
-        setForm((f) => ({ ...f, departmentId: ds[0].id }));
+      if (ds.length > 0) {
+        setForm((f) => (f.departmentId === 0 ? { ...f, departmentId: ds[0].id } : f));
       }
     } catch (err) {
       if (err instanceof ApiError) setErreur(err.messages.join(' '));
@@ -75,7 +75,7 @@ export function ScolariteCampagnes() {
     } finally {
       setChargement(false);
     }
-  }, [form.departmentId]);
+  }, []);
 
   useEffect(() => {
     void charger();
@@ -136,10 +136,10 @@ export function ScolariteCampagnes() {
   }, [campagnes, filtreStatut]);
 
   return (
-    <div className="space-y-5 max-w-6xl mx-auto animate-fade-in pb-6">
+    <div className="space-y-4 sm:space-y-5 max-w-6xl mx-auto animate-fade-in pb-6">
       <PageHeader
         title="Campagnes d'évaluation"
-        description="Créez, ouvrez et clôturez les campagnes semestrielles d'évaluation par département."
+        description="Création, ouverture et clôture des campagnes semestrielles."
         breadcrumbs={[
           { label: 'Accueil', href: '/' },
           { label: 'Campagnes' },
@@ -152,7 +152,7 @@ export function ScolariteCampagnes() {
             leftIcon={<Plus className="w-4 h-4" />}
             onClick={() => setShowForm((v) => !v)}
           >
-            {showForm ? 'Fermer le formulaire' : 'Nouvelle campagne'}
+            {showForm ? 'Fermer' : 'Nouvelle campagne'}
           </Button>
         }
       />
@@ -164,13 +164,13 @@ export function ScolariteCampagnes() {
       )}
 
       {showForm && !chargement && (
-        <div className="bg-enp-blue-ice/40 border border-enp-blue-primary/30 p-5 space-y-4 animate-fade-in">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-enp-blue-deep">
-            Créer une nouvelle campagne d'évaluation
+        <div className="bg-enp-blue-ice/30 border border-enp-blue-primary/30 p-4 sm:p-5 space-y-4 animate-fade-in">
+          <h2 className="text-sm font-semibold text-enp-blue-deep">
+            Nouvelle campagne d'évaluation
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             <div className="sm:col-span-2">
-              <label htmlFor="libelle" className="block text-xs font-bold text-enp-black mb-1">
+              <label htmlFor="libelle" className="block text-xs font-semibold text-enp-black mb-1">
                 Libellé officiel
               </label>
               <input
@@ -184,7 +184,7 @@ export function ScolariteCampagnes() {
               />
             </div>
             <div>
-              <label htmlFor="dept" className="block text-xs font-bold text-enp-black mb-1">
+              <label htmlFor="dept" className="block text-xs font-semibold text-enp-black mb-1">
                 Département
               </label>
               <select
@@ -201,7 +201,7 @@ export function ScolariteCampagnes() {
               </select>
             </div>
             <div>
-              <label htmlFor="annee" className="block text-xs font-bold text-enp-black mb-1">
+              <label htmlFor="annee" className="block text-xs font-semibold text-enp-black mb-1">
                 Année universitaire
               </label>
               <input
@@ -214,7 +214,7 @@ export function ScolariteCampagnes() {
               />
             </div>
             <div>
-              <label htmlFor="semestre" className="block text-xs font-bold text-enp-black mb-1">
+              <label htmlFor="semestre" className="block text-xs font-semibold text-enp-black mb-1">
                 Semestre (1 à 10)
               </label>
               <input
@@ -229,8 +229,8 @@ export function ScolariteCampagnes() {
             </div>
             <div className="hidden lg:block" />
             <div>
-              <label htmlFor="debut" className="block text-xs font-bold text-enp-black mb-1">
-                Date et heure d'ouverture
+              <label htmlFor="debut" className="block text-xs font-semibold text-enp-black mb-1">
+                Ouverture
               </label>
               <input
                 id="debut"
@@ -241,8 +241,8 @@ export function ScolariteCampagnes() {
               />
             </div>
             <div>
-              <label htmlFor="fin" className="block text-xs font-bold text-enp-black mb-1">
-                Date et heure de clôture
+              <label htmlFor="fin" className="block text-xs font-semibold text-enp-black mb-1">
+                Clôture
               </label>
               <input
                 id="fin"
@@ -260,7 +260,7 @@ export function ScolariteCampagnes() {
             </Alert>
           )}
 
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex gap-2 justify-end pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => setShowForm(false)}>
               Annuler
             </Button>
@@ -277,12 +277,9 @@ export function ScolariteCampagnes() {
         </div>
       )}
 
-      {/* FILTRES RAPIDES PAR STATUT */}
+      {/* FILTRES PAR STATUT */}
       {!chargement && campagnes.length > 0 && (
-        <div className="bg-white border border-enp-border p-3.5 flex flex-wrap items-center gap-1.5 shadow-xs">
-          <span className="text-xs font-bold uppercase tracking-wider text-enp-blue-deep mr-2">
-            Statut :
-          </span>
+        <div className="bg-white border border-enp-border p-3 flex items-center gap-1.5 overflow-x-auto">
           {(
             [
               { id: 'toutes', label: `Toutes (${campagnes.length})` },
@@ -296,7 +293,7 @@ export function ScolariteCampagnes() {
               key={t.id}
               type="button"
               onClick={() => setFiltreStatut(t.id)}
-              className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
+              className={`px-3 py-2 text-xs font-semibold border transition-colors whitespace-nowrap shrink-0 min-h-[38px] tabular-nums ${
                 filtreStatut === t.id
                   ? 'bg-enp-blue-deep text-white border-enp-blue-deep'
                   : 'bg-white text-enp-black border-enp-border hover:bg-enp-blue-ice/40'
@@ -309,20 +306,83 @@ export function ScolariteCampagnes() {
       )}
 
       {chargement ? (
-        <div className="bg-white border border-enp-border p-12 text-center text-sm text-enp-gray-medium">
-          Chargement des campagnes d'évaluation…
+        <div className="bg-white border border-enp-border p-10 text-center text-sm text-enp-gray-medium">
+          Chargement des campagnes…
         </div>
       ) : campagnesFiltrees.length === 0 ? (
-        <div className="bg-white border border-enp-border p-10 text-center space-y-2 shadow-xs">
-          <Megaphone className="w-10 h-10 text-enp-gray-medium mx-auto opacity-40" />
-          <p className="text-sm font-bold text-enp-blue-deep">Aucune campagne dans cette vue</p>
+        <div className="bg-white border border-enp-border p-10 text-center space-y-2">
+          <Megaphone className="w-8 h-8 text-enp-gray-medium mx-auto opacity-40" />
+          <p className="text-sm font-semibold text-enp-blue-deep">Aucune campagne dans cette vue</p>
         </div>
       ) : (
-        <div className="bg-white border border-enp-border shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="bg-white border border-enp-border overflow-hidden">
+          {/* VUE MOBILE NATIVE */}
+          <div className="block md:hidden divide-y divide-enp-border">
+            {campagnesFiltrees.map((c) => (
+              <div key={c.id} className="p-4 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-enp-black leading-snug">
+                      {c.libelle}
+                    </p>
+                    <p className="text-xs text-enp-gray-medium mt-1">
+                      {c.departement} ·{' '}
+                      <span className="font-mono tabular-nums text-enp-blue-deep font-medium">
+                        {c.anneeUniversitaire} · S{c.semestre}
+                      </span>
+                    </p>
+                    <p className="text-xs text-enp-gray-medium font-mono tabular-nums mt-0.5">
+                      {c.debut.slice(0, 10)} au {c.fin.slice(0, 10)}
+                    </p>
+                  </div>
+                  <Badge variant={STATUT_VARIANT[c.statut] ?? 'outline'} className="shrink-0">
+                    {STATUT_LABEL[c.statut] ?? c.statut}
+                  </Badge>
+                </div>
+
+                {(c.statut === 'brouillon' || c.statut === 'ouverte') && (
+                  <div className="pt-1 flex justify-end">
+                    {c.statut === 'brouillon' && (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        className="min-h-[40px]"
+                        leftIcon={<Unlock className="w-3.5 h-3.5" />}
+                        onClick={() => {
+                          setConfirmAction({ type: 'ouvrir', id: c.id, libelle: c.libelle });
+                          setActionErreur(null);
+                        }}
+                      >
+                        Ouvrir
+                      </Button>
+                    )}
+                    {c.statut === 'ouverte' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-[40px]"
+                        leftIcon={<Lock className="w-3.5 h-3.5 text-enp-red-error" />}
+                        onClick={() => {
+                          setConfirmAction({ type: 'cloturer', id: c.id, libelle: c.libelle });
+                          setActionErreur(null);
+                        }}
+                      >
+                        Clôturer
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* VUE BUREAU */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="bg-enp-blue-deep text-white text-xs uppercase tracking-wider">
+                <tr className="bg-enp-bg border-b border-enp-border text-enp-gray-dark text-xs">
                   <th scope="col" className="text-left px-4 py-3 font-semibold">Libellé</th>
                   <th scope="col" className="text-left px-4 py-3 font-semibold">Département</th>
                   <th scope="col" className="text-center px-4 py-3 font-semibold">Année / Sem.</th>
@@ -336,10 +396,10 @@ export function ScolariteCampagnes() {
                   <tr key={c.id} className="hover:bg-enp-blue-ice/20 transition-colors">
                     <td className="px-4 py-3 font-semibold text-enp-black">{c.libelle}</td>
                     <td className="px-4 py-3 text-enp-gray-dark">{c.departement}</td>
-                    <td className="px-4 py-3 text-center font-mono text-xs text-enp-blue-deep font-bold">
-                      {c.anneeUniversitaire} • S{c.semestre}
+                    <td className="px-4 py-3 text-center font-mono tabular-nums text-xs text-enp-blue-deep font-semibold">
+                      {c.anneeUniversitaire} · S{c.semestre}
                     </td>
-                    <td className="px-4 py-3 text-xs text-enp-gray-medium whitespace-nowrap">
+                    <td className="px-4 py-3 text-xs font-mono tabular-nums text-enp-gray-medium whitespace-nowrap">
                       {c.debut.slice(0, 10)} au {c.fin.slice(0, 10)}
                     </td>
                     <td className="px-4 py-3 text-center">

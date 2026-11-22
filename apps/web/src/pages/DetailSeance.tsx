@@ -1,18 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
-  AlertCircle,
   Pencil,
   Paperclip,
   History,
   Download,
-  Stamp,
-  Clock,
-  Calendar,
   Lock,
-  MessageSquare,
-  FileText,
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
@@ -27,7 +21,6 @@ import {
   Alert,
   Modal,
   Textarea,
-  FileUpload,
 } from '@/components/ui';
 
 const LIBELLES_VISA: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' }> = {
@@ -46,8 +39,7 @@ const LIBELLES_STATUT: Record<string, string> = {
 
 export function DetailSeance() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { aRole, utilisateur } = useAuth();
+  const { aRole } = useAuth();
   const { confirmer } = useConfirmation();
 
   const [seance, setSeance] = useState<Seance | null>(null);
@@ -55,6 +47,7 @@ export function DetailSeance() {
   const [pieces, setPieces] = useState<PieceJointe[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [erreurAction, setErreurAction] = useState<string | null>(null);
 
   // Modale de contestation pour enseignant
   const [modaleContestation, setModaleContestation] = useState(false);
@@ -109,6 +102,7 @@ export function DetailSeance() {
     });
     if (!confirme) return;
     setActionEnCours(true);
+    setErreurAction(null);
     try {
       await api.visaSeance(Number(id), {
         decision,
@@ -118,13 +112,16 @@ export function DetailSeance() {
       setCommentaireContestation('');
       await charger();
     } catch (err) {
-      alert(err instanceof ApiError ? err.messages.join(' ') : "L'opération de visa a échoué.");
+      setErreurAction(
+        err instanceof ApiError ? err.messages.join(' ') : "L'opération de visa a échoué.",
+      );
     } finally {
       setActionEnCours(false);
     }
   }
 
   async function handleTelechargerPiece(pieceId: number, nomFichier: string) {
+    setErreurAction(null);
     try {
       const blob = await api.telechargerPiece(pieceId);
       const url = URL.createObjectURL(blob);
@@ -136,19 +133,20 @@ export function DetailSeance() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      alert('Impossible de télécharger la pièce jointe.');
+      setErreurAction('Impossible de télécharger la pièce jointe.');
     }
   }
 
   async function handleAjouterPiece() {
     if (!id || !fichierUpload) return;
     setActionEnCours(true);
+    setErreurAction(null);
     try {
       await api.ajouterPieceSeance(Number(id), fichierUpload);
       setFichierUpload(null);
       await charger();
     } catch {
-      alert("Échec de l'ajout de la pièce jointe.");
+      setErreurAction("Échec de l'ajout de la pièce jointe.");
     } finally {
       setActionEnCours(false);
     }
@@ -192,72 +190,66 @@ export function DetailSeance() {
       </Link>
 
       <PageHeader
-        title={`Séance #${seance.id} • ${seance.intitule}`}
-        description={`UE ${seance.ueCode} (${seance.type}) • Enregistrée au registre numérique officiel`}
+        title={seance.intitule || `Séance #${seance.id}`}
+        description={`${seance.ueCode} · ${seance.type}`}
         badge={<Badge variant={visaConf.variant}>{visaConf.label}</Badge>}
         actions={
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2">
             {peutModifier && (
-              <Link to={`/cahier-texte/${seance.id}/modifier`} className="w-full sm:w-auto">
-                <Button variant="outline" size="sm" className="w-full sm:w-auto justify-center" leftIcon={<Pencil className="w-4 h-4" />}>
-                  Modifier la séance
+              <Link to={`/cahier-texte/${seance.id}/modifier`}>
+                <Button variant="outline" size="sm" leftIcon={<Pencil className="w-3.5 h-3.5" />}>
+                  Modifier
                 </Button>
               </Link>
             )}
             {estVisee && (
-              <span className="text-xs px-2.5 py-1.5 bg-enp-bg text-enp-gray-medium border border-enp-border flex items-center justify-center gap-1 w-full sm:w-auto">
+              <span className="text-xs px-2.5 py-1.5 bg-enp-bg text-enp-gray-medium border border-enp-border inline-flex items-center gap-1">
                 <Lock className="w-3.5 h-3.5" />
-                Verrouillée après visa
+                Verrouillée
               </span>
             )}
             {peutViser && (
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <>
                 <Button
-                  variant="danger"
+                  variant="outline"
                   size="sm"
-                  className="w-full sm:w-auto justify-center"
                   onClick={() => setModaleContestation(true)}
-                  leftIcon={<AlertTriangle className="w-4 h-4" />}
+                  leftIcon={<AlertTriangle className="w-3.5 h-3.5 text-enp-red-error" />}
                 >
-                  Contester
+                  Réserve
                 </Button>
                 <Button
                   variant="success"
                   size="sm"
-                  className="w-full sm:w-auto justify-center"
                   isLoading={actionEnCours}
                   onClick={() => void handleVisa('vise')}
-                  leftIcon={<CheckCircle2 className="w-4 h-4" />}
+                  leftIcon={<CheckCircle2 className="w-3.5 h-3.5" />}
                 >
-                  Viser la séance
+                  Viser
                 </Button>
-              </div>
+              </>
             )}
           </div>
         }
       />
 
-      {/* Alerte si séance contestée avec motif officiel */}
-      {estContestee && (
-        <Alert
-          variant="danger"
-          title="Séance contestée par l'enseignant-chercheur"
-          icon={<AlertTriangle className="w-5 h-5 text-enp-red-error shrink-0 mt-0.5" />}
-        >
-          <div className="space-y-1 mt-1 text-xs sm:text-sm">
-            <p>
-              <strong>Motif de contestation :</strong>{' '}
-              {seance.visa.commentaire || "Aucun commentaire spécifié."}
-            </p>
-            <p className="text-xs text-enp-gray-dark">
-              Le délégué de promotion est invité à corriger la saisie conformément aux indications de l'enseignant.
-            </p>
-          </div>
+      {erreurAction && (
+        <Alert variant="danger" title="Erreur" onClose={() => setErreurAction(null)}>
+          {erreurAction}
         </Alert>
       )}
 
-      {/* Grille des caractéristiques de la séance */}
-      <div className="bg-white border border-enp-border p-6 space-y-6">
+      {estContestee && (
+        <Alert
+          variant="danger"
+          title="Séance contestée"
+          icon={<AlertTriangle className="w-4 h-4 text-enp-red-error shrink-0 mt-0.5" />}
+        >
+          {seance.visa.commentaire || 'Aucun commentaire spécifié.'}
+        </Alert>
+      )}
+
+      <div className="bg-white border border-enp-border p-4 sm:p-5 space-y-5">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pb-4 border-b border-enp-border text-xs sm:text-sm">
           <div>
             <span className="text-enp-gray-medium block text-xs uppercase font-semibold">Date</span>

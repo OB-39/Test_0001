@@ -52,6 +52,12 @@ import type {
   EvaluationDossier,
   NoteEtudiant,
   PresencesEtudiant,
+  ArriveePresenceRecente,
+  SessionQrPresence,
+  ResultatScanPresence,
+  JustificatifAbsence,
+  SoumissionJustificatif,
+  StatutJustificatif,
   SeancePresence,
   DetailSeancePresence,
   StatutPresenceEtudiant,
@@ -62,6 +68,13 @@ import type {
   LigneAudit,
 } from "./types";
 import { ApiError } from "./error";
+import {
+  DUREE_ROTATION_MS,
+  evaluerReglesScan,
+  formaterHeureCourte,
+  genererJetonPresenceClient,
+  parserJetonPresence,
+} from "../utils/qrPresenceToken";
 
 /* ------------------------------------------------------------------ */
 /*  Comptes de démonstration                                           */
@@ -185,7 +198,7 @@ let adresseEmailEnAttente: { userId: number; email: string } | null = null;
 const CAMPAGNE_ID = 1;
 const FIN_CAMPAGNE = "2026-11-15T23:59:59Z";
 
-let ueMemoire: UeAEvaluer[] = [
+const ueMemoire: UeAEvaluer[] = [
   {
     ueId: 201,
     code: "INF501",
@@ -555,6 +568,7 @@ export async function verifierMfa(_corps?: {
   code: string;
   rememberDevice?: boolean;
 }): Promise<ReponseConnexion> {
+  void _corps;
   throw new ApiError({
     message: "MFA indisponible en mode démonstration.",
     statusCode: 400,
@@ -607,6 +621,7 @@ export async function changerMotDePasse(_corps: {
   motDePasseActuel: string;
   nouveauMotDePasse: string;
 }): Promise<ReponseSimple> {
+  void _corps;
   await delai();
   return { ok: true };
 }
@@ -1094,10 +1109,20 @@ const UE_CAHIER: UeCahier[] = [
 const ETUDIANTS_DOSSIER = [
   { id: 1001, nom: "Benali", prenom: "Amine", identifiant: "DEMO-ETU" },
   { id: 1002, nom: "Cherif", prenom: "Lina", identifiant: "DEMO-DEL" },
+  { id: 1101, nom: "Koudasse", prenom: "Joy Amos", identifiant: "ENP-2026-011" },
+  { id: 1102, nom: "Ohounsoun", prenom: "Bienvenu", identifiant: "ENP-2026-012" },
+  { id: 1103, nom: "Mensah", prenom: "Kofi", identifiant: "ENP-2026-013" },
+  { id: 1104, nom: "Agbeko", prenom: "Ama", identifiant: "ENP-2026-014" },
+  { id: 1105, nom: "Tchalla", prenom: "Kodjo", identifiant: "ENP-2026-015" },
+  { id: 1106, nom: "Lawson", prenom: "Afi", identifiant: "ENP-2026-016" },
+  { id: 1107, nom: "Dossou", prenom: "Komi", identifiant: "ENP-2026-017" },
+  { id: 1108, nom: "Adotevi", prenom: "Sena", identifiant: "ENP-2026-018" },
+  { id: 1109, nom: "Gbedemah", prenom: "Akossiwa", identifiant: "ENP-2026-019" },
+  { id: 1110, nom: "Ayitevi", prenom: "Edem", identifiant: "ENP-2026-020" },
 ];
 const INSCRIPTIONS_DOSSIER: Record<number, number[]> = {
-  1001: [401],
-  1002: [401],
+  1001: [401, 402, 403],
+  1002: [401, 402, 403],
 };
 let evaluationDossierId = 1;
 let evaluationsDossier: (EvaluationDossier & { courseId: number })[] = [
@@ -1118,13 +1143,161 @@ let presencesDossier: (SeancePresence & {
   {
     id: ++presenceSessionId,
     courseId: 401,
+    date: new Date().toISOString().slice(0, 10),
+    libelle: "CM : Cours magistral (Émargement en direct)",
+    effectif: ETUDIANTS_DOSSIER.length,
+    marques: 0,
+    etudiantStatuts: {},
+  },
+  {
+    id: ++presenceSessionId,
+    courseId: 401,
     date: "2026-09-20",
     libelle: "Cours magistral",
-    effectif: 2,
+    effectif: ETUDIANTS_DOSSIER.length,
     marques: 2,
     etudiantStatuts: { 1001: "present", 1002: "retard" },
   },
 ];
+
+/* ------------------------------------------------------------------ */
+/*  Stockage partage inter-onglets pour le QR Code dynamique (maquette)*/
+/* ------------------------------------------------------------------ */
+
+const CLE_STOCKAGE_QR_MOCK = "enp_mock_qr_presence_sessions_v1";
+
+interface SessionQrMockPersistee {
+  sessionId: number;
+  seanceId: number;
+  courseId: number;
+  codeUe: string;
+  intituleUe: string;
+  libelleSeance: string;
+  dateSeance: string;
+  statut: "ouverte" | "pause" | "fermee";
+  secretKey: string;
+  ouvertA: string;
+  fermeA: string | null;
+  counter: number;
+  lastToken: string;
+  lastTokenTimestampMs: number;
+  dernierVirtuelMs: number;
+  etudiantsScannes: number[];
+  appareilsParEtudiant: Record<string, number>;
+  recents: ArriveePresenceRecente[];
+}
+
+function lireSessionsQrStockees(): Record<string, SessionQrMockPersistee> {
+  try {
+    const brut = window.localStorage.getItem(CLE_STOCKAGE_QR_MOCK);
+    if (!brut) return {};
+    const parsed = JSON.parse(brut) as Record<string, SessionQrMockPersistee>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function ecrireSessionsQrStockees(
+  sessions: Record<string, SessionQrMockPersistee>,
+): void {
+  try {
+    window.localStorage.setItem(CLE_STOCKAGE_QR_MOCK, JSON.stringify(sessions));
+  } catch {
+    // Stockage local indisponible, on conserve l'etat en memoire.
+  }
+}
+
+function synchroniserPresencesDepuisQrMock(): void {
+  const sessions = lireSessionsQrStockees();
+  for (const qr of Object.values(sessions)) {
+    let seance = presencesDossier.find((item) => item.id === qr.seanceId);
+    if (!seance) {
+      seance = {
+        id: qr.seanceId,
+        courseId: qr.courseId,
+        date: qr.dateSeance,
+        libelle: qr.libelleSeance,
+        effectif: ETUDIANTS_DOSSIER.length,
+        marques: 0,
+        etudiantStatuts: {},
+      };
+      presencesDossier = [seance, ...presencesDossier];
+    }
+    for (const etudiantId of qr.etudiantsScannes) {
+      if (!seance.etudiantStatuts[etudiantId]) {
+        seance.etudiantStatuts[etudiantId] = "present";
+      }
+    }
+    seance.marques = Object.keys(seance.etudiantStatuts).length;
+  }
+}
+
+function formaterSessionQr(
+  qr: SessionQrMockPersistee,
+  nowMs: number,
+): SessionQrPresence {
+  const restant =
+    qr.statut === "ouverte"
+      ? Math.max(0, DUREE_ROTATION_MS - (nowMs - qr.lastTokenTimestampMs))
+      : 0;
+  return {
+    sessionId: qr.sessionId,
+    seanceId: qr.seanceId,
+    courseId: qr.courseId,
+    codeUe: qr.codeUe,
+    intituleUe: qr.intituleUe,
+    libelleSeance: qr.libelleSeance,
+    dateSeance: qr.dateSeance,
+    statut: qr.statut,
+    ouvertA: qr.ouvertA,
+    fermeA: qr.fermeA,
+    dureeValiditeSecondes: 6,
+    token: qr.statut === "ouverte" ? qr.lastToken : "",
+    counter: qr.counter,
+    timestampMs: qr.lastTokenTimestampMs,
+    expireDansMs: restant > 0 ? restant : DUREE_ROTATION_MS,
+    presents: qr.etudiantsScannes.length,
+    inscrits: ETUDIANTS_DOSSIER.length,
+    recents: qr.recents.slice(0, 5),
+  };
+}
+
+function avancerEmargementsVirtuels(
+  qr: SessionQrMockPersistee,
+  nowMs: number,
+): void {
+  if (qr.statut !== "ouverte") return;
+  const intervalleMs = 4000;
+  const ecoule = nowMs - qr.dernierVirtuelMs;
+  if (ecoule < intervalleMs) return;
+
+  const nombreNouveaux = Math.min(2, Math.floor(ecoule / intervalleMs));
+  // On reserve les comptes interactifs 1001 (DEMO-ETU) et 1002 (DEMO-DEL)
+  // pour permettre le scan manuel dans un second onglet.
+  const candidats = ETUDIANTS_DOSSIER.filter(
+    (etu) =>
+      etu.id !== 1001 &&
+      etu.id !== 1002 &&
+      !qr.etudiantsScannes.includes(etu.id),
+  );
+
+  for (let i = 0; i < nombreNouveaux && i < candidats.length; i++) {
+    const etu = candidats[i];
+    const instant = new Date(nowMs - (nombreNouveaux - 1 - i) * 600).toISOString();
+    qr.etudiantsScannes.push(etu.id);
+    qr.appareilsParEtudiant[`enp-virtual-device-${etu.id}`] = etu.id;
+    qr.recents.unshift({
+      etudiantId: etu.id,
+      nom: etu.nom,
+      prenom: etu.prenom,
+      identifiant: etu.identifiant,
+      scanneA: instant,
+    });
+  }
+  qr.recents = qr.recents.slice(0, 10);
+  qr.dernierVirtuelMs = nowMs;
+}
 
 let seanceIdSuivant = 1012;
 let seancesMemoire: Seance[] = [
@@ -1519,11 +1692,13 @@ export async function exporterCahier(
 }
 
 export async function historiqueSeance(_id: number): Promise<VersionSeance[]> {
+  void _id;
   await delai();
   return [];
 }
 
 export async function piecesSeance(_id: number): Promise<PieceJointe[]> {
+  void _id;
   await delai();
   return [];
 }
@@ -1532,6 +1707,7 @@ export async function ajouterPieceSeance(
   _id: number,
   fichier: File,
 ): Promise<PieceJointe> {
+  void _id;
   await delai();
   return {
     id: Date.now(),
@@ -1542,6 +1718,7 @@ export async function ajouterPieceSeance(
 }
 
 export async function telechargerPiece(_id: number): Promise<Blob> {
+  void _id;
   await delai();
   return new Blob();
 }
@@ -1552,6 +1729,7 @@ export async function notifications(): Promise<Notification[]> {
 }
 
 export async function marquerNotificationLue(_id: number): Promise<void> {
+  void _id;
   await delai();
 }
 
@@ -1681,6 +1859,7 @@ export async function dossierSeancesPresence(
   courseId: number,
 ): Promise<SeancePresence[]> {
   await delai();
+  synchroniserPresencesDepuisQrMock();
   return presencesDossier
     .filter((session) => session.courseId === courseId)
     .map((session) => ({
@@ -1717,6 +1896,7 @@ export async function dossierPresenceSeance(
   sessionId: number,
 ): Promise<DetailSeancePresence> {
   await delai();
+  synchroniserPresencesDepuisQrMock();
   const session = presencesDossier.find((item) => item.id === sessionId);
   if (!session)
     throw new ApiError({ message: "Séance introuvable.", statusCode: 404 });
@@ -1814,6 +1994,7 @@ function calculerStatistiquesPresence(
 
 export async function dossierMesPresences(): Promise<PresencesEtudiant> {
   await delai();
+  synchroniserPresencesDepuisQrMock();
   const etudiantId = sessionMemoire?.utilisateur.id;
   const coursInscrits = new Set(
     etudiantId ? (INSCRIPTIONS_DOSSIER[etudiantId] ?? []) : [],
@@ -1868,6 +2049,414 @@ export async function dossierMesPresences(): Promise<PresencesEtudiant> {
     },
     presences,
   };
+}
+
+export async function presenceDemarrerSession(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  await delai(120);
+  const seance = presencesDossier.find((item) => item.id === seanceId);
+  if (!seance) {
+    throw new ApiError({ message: "Séance introuvable.", statusCode: 404 });
+  }
+  const cours = UE_CAHIER.find((ue) => ue.ueId === seance.courseId) ?? UE_CAHIER[0];
+  const nowMs = Date.now();
+  const sessions = lireSessionsQrStockees();
+  const existante = sessions[String(seanceId)];
+
+  const secretKey =
+    existante?.secretKey ??
+    `enp-mock-qr-${seanceId}-${Math.random().toString(36).slice(2, 14)}`;
+  const counter = (existante?.counter ?? 0) + 1;
+  const jeton = genererJetonPresenceClient(seanceId, counter, secretKey, nowMs);
+
+  const etudiantsDejaPresents = Object.entries(seance.etudiantStatuts)
+    .filter(([, statut]) => statut === "present" || statut === "retard")
+    .map(([id]) => Number(id));
+  const scannes = Array.from(
+    new Set([...(existante?.etudiantsScannes ?? []), ...etudiantsDejaPresents]),
+  );
+
+  const sessionQr: SessionQrMockPersistee = {
+    sessionId: existante?.sessionId ?? seanceId * 10 + 1,
+    seanceId,
+    courseId: seance.courseId,
+    codeUe: cours.code,
+    intituleUe: cours.intitule,
+    libelleSeance: seance.libelle,
+    dateSeance: seance.date,
+    statut: "ouverte",
+    secretKey,
+    ouvertA: existante?.ouvertA ?? new Date(nowMs).toISOString(),
+    fermeA: null,
+    counter,
+    lastToken: jeton.token,
+    lastTokenTimestampMs: jeton.timestampMs,
+    dernierVirtuelMs: nowMs,
+    etudiantsScannes: scannes,
+    appareilsParEtudiant: existante?.appareilsParEtudiant ?? {},
+    recents: existante?.recents ?? [],
+  };
+
+  sessions[String(seanceId)] = sessionQr;
+  ecrireSessionsQrStockees(sessions);
+  synchroniserPresencesDepuisQrMock();
+  return formaterSessionQr(sessionQr, nowMs);
+}
+
+export async function presenceObtenirJeton(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  await delai(90);
+  const nowMs = Date.now();
+  const sessions = lireSessionsQrStockees();
+  const sessionQr = sessions[String(seanceId)];
+  if (!sessionQr) {
+    return presenceDemarrerSession(seanceId);
+  }
+
+  avancerEmargementsVirtuels(sessionQr, nowMs);
+
+  if (
+    sessionQr.statut === "ouverte" &&
+    (!sessionQr.lastToken || nowMs - sessionQr.lastTokenTimestampMs >= 5500)
+  ) {
+    sessionQr.counter += 1;
+    const jeton = genererJetonPresenceClient(
+      seanceId,
+      sessionQr.counter,
+      sessionQr.secretKey,
+      nowMs,
+    );
+    sessionQr.lastToken = jeton.token;
+    sessionQr.lastTokenTimestampMs = jeton.timestampMs;
+  }
+
+  sessions[String(seanceId)] = sessionQr;
+  ecrireSessionsQrStockees(sessions);
+  synchroniserPresencesDepuisQrMock();
+  return formaterSessionQr(sessionQr, nowMs);
+}
+
+export async function presenceMettreEnPause(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  await delai(100);
+  const nowMs = Date.now();
+  const sessions = lireSessionsQrStockees();
+  const sessionQr = sessions[String(seanceId)];
+  if (!sessionQr || sessionQr.statut !== "ouverte") {
+    throw new ApiError({
+      message: "Aucune session ouverte à mettre en pause pour cette séance.",
+      statusCode: 404,
+    });
+  }
+  sessionQr.statut = "pause";
+  sessionQr.lastToken = "";
+  sessions[String(seanceId)] = sessionQr;
+  ecrireSessionsQrStockees(sessions);
+  return formaterSessionQr(sessionQr, nowMs);
+}
+
+export async function presenceReprendreSession(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  await delai(100);
+  const nowMs = Date.now();
+  const sessions = lireSessionsQrStockees();
+  const sessionQr = sessions[String(seanceId)];
+  if (!sessionQr || sessionQr.statut !== "pause") {
+    throw new ApiError({
+      message: "Aucune session en pause à reprendre pour cette séance.",
+      statusCode: 404,
+    });
+  }
+  sessionQr.statut = "ouverte";
+  sessionQr.counter += 1;
+  const jeton = genererJetonPresenceClient(
+    seanceId,
+    sessionQr.counter,
+    sessionQr.secretKey,
+    nowMs,
+  );
+  sessionQr.lastToken = jeton.token;
+  sessionQr.lastTokenTimestampMs = jeton.timestampMs;
+  sessions[String(seanceId)] = sessionQr;
+  ecrireSessionsQrStockees(sessions);
+  return formaterSessionQr(sessionQr, nowMs);
+}
+
+export async function presenceCloturerSession(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  await delai(120);
+  const nowMs = Date.now();
+  const sessions = lireSessionsQrStockees();
+  const sessionQr = sessions[String(seanceId)];
+  if (!sessionQr) {
+    throw new ApiError({
+      message: "Aucune session d'émargement active pour cette séance.",
+      statusCode: 404,
+    });
+  }
+
+  sessionQr.statut = "fermee";
+  sessionQr.fermeA = new Date(nowMs).toISOString();
+  sessionQr.lastToken = "";
+  sessions[String(seanceId)] = sessionQr;
+  ecrireSessionsQrStockees(sessions);
+  synchroniserPresencesDepuisQrMock();
+  return formaterSessionQr(sessionQr, nowMs);
+}
+
+export async function presenceScannerQr(corps: {
+  token: string;
+  deviceFingerprint: string;
+}): Promise<ResultatScanPresence> {
+  await delai(120);
+  const etudiant = sessionMemoire?.utilisateur;
+  if (!etudiant) {
+    throw new ApiError({
+      message: "Session expirée. Veuillez vous reconnecter.",
+      statusCode: 401,
+    });
+  }
+
+  const meta = parserJetonPresence(corps.token);
+  if (!meta) {
+    throw new ApiError({
+      message: "QR Code invalide ou non reconnu par la plateforme ENP.",
+      statusCode: 400,
+    });
+  }
+
+  const sessions = lireSessionsQrStockees();
+  const sessionQr = sessions[String(meta.seanceId)];
+  if (!sessionQr) {
+    throw new ApiError({
+      message: "Aucune session d'émargement ouverte pour ce QR Code.",
+      statusCode: 404,
+    });
+  }
+
+  const nowMs = Date.now();
+  const evaluation = evaluerReglesScan(
+    corps.token,
+    etudiant.id,
+    corps.deviceFingerprint,
+    {
+      statut: sessionQr.statut,
+      secretKey: sessionQr.secretKey,
+      etudiantsInscrits: ETUDIANTS_DOSSIER.map((e) => e.id),
+      etudiantsScannes: sessionQr.etudiantsScannes,
+      appareilsParEtudiant: sessionQr.appareilsParEtudiant,
+    },
+    nowMs,
+  );
+
+  if (!evaluation.valide) {
+    const statusCode =
+      evaluation.codeErreur === "deja_emarge"
+        ? 409
+        : evaluation.codeErreur === "session_fermee" ||
+            evaluation.codeErreur === "appareil_partage" ||
+            evaluation.codeErreur === "non_inscrit"
+          ? 403
+          : 400;
+    throw new ApiError({
+      message: evaluation.erreur ?? "Émargement refusé.",
+      statusCode,
+    });
+  }
+
+  const scanneA = new Date(nowMs).toISOString();
+  const ficheEtudiant = ETUDIANTS_DOSSIER.find((e) => e.id === etudiant.id);
+  sessionQr.etudiantsScannes.push(etudiant.id);
+  sessionQr.appareilsParEtudiant[corps.deviceFingerprint] = etudiant.id;
+  sessionQr.recents.unshift({
+    etudiantId: etudiant.id,
+    nom: ficheEtudiant?.nom ?? etudiant.nom,
+    prenom: ficheEtudiant?.prenom ?? etudiant.prenom,
+    identifiant: ficheEtudiant?.identifiant ?? `ETU-${etudiant.id}`,
+    scanneA,
+  });
+  sessionQr.recents = sessionQr.recents.slice(0, 10);
+
+  sessions[String(meta.seanceId)] = sessionQr;
+  ecrireSessionsQrStockees(sessions);
+  synchroniserPresencesDepuisQrMock();
+
+  const heureFormatee = formaterHeureCourte(scanneA);
+  return {
+    ok: true,
+    seanceId: sessionQr.seanceId,
+    codeUe: sessionQr.codeUe,
+    intituleUe: sessionQr.intituleUe,
+    libelleSeance: sessionQr.libelleSeance,
+    dateSeance: sessionQr.dateSeance,
+    scanneA,
+    statut: "present",
+    message: `Présence validée pour ${sessionQr.codeUe} à ${heureFormatee}`,
+  };
+}
+
+const CLE_STOCKAGE_JUSTIFICATIFS_MOCK = "enp_mock_justificatifs_absence_v1";
+
+function lireJustificatifsMock(): JustificatifAbsence[] {
+  try {
+    if (typeof window === "undefined") return [];
+    const brut = window.localStorage.getItem(CLE_STOCKAGE_JUSTIFICATIFS_MOCK);
+    if (!brut) {
+      const initial: JustificatifAbsence[] = [
+        {
+          id: 501,
+          seanceId: 2,
+          courseId: 401,
+          codeUe: "INF501",
+          intituleUe: "Algorithmique avancée",
+          dateSeance: "2026-09-20",
+          libelleSeance: "Cours magistral",
+          etudiantId: 1002,
+          etudiantNom: "Cherif",
+          etudiantPrenom: "Lina",
+          etudiantIdentifiant: "DEMO-DEL",
+          motif: "Convocation officielle au bureau des stages ENP.",
+          nomFichier: "convocation_stage_enp.pdf",
+          typeMime: "application/pdf",
+          tailleOctets: 184_320,
+          statut: "en_attente",
+          commentaireValidation: null,
+          deposeLe: new Date(Date.now() - 3_600_000).toISOString(),
+          traiteLe: null,
+        },
+      ];
+      window.localStorage.setItem(
+        CLE_STOCKAGE_JUSTIFICATIFS_MOCK,
+        JSON.stringify(initial),
+      );
+      return initial;
+    }
+    const parsed = JSON.parse(brut);
+    return Array.isArray(parsed) ? (parsed as JustificatifAbsence[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function ecrireJustificatifsMock(liste: JustificatifAbsence[]): void {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      CLE_STOCKAGE_JUSTIFICATIFS_MOCK,
+      JSON.stringify(liste),
+    );
+  } catch {
+    // Stockage local non disponible
+  }
+}
+
+export async function dossierListerJustificatifs(
+  courseId?: number,
+): Promise<JustificatifAbsence[]> {
+  await delai(90);
+  const utilisateur = sessionMemoire?.utilisateur;
+  const tous = lireJustificatifsMock();
+  if (!utilisateur) return [];
+  if (
+    utilisateur.activeRole === "etudiant" ||
+    utilisateur.activeRole === "delegue"
+  ) {
+    return tous.filter((j) => j.etudiantId === utilisateur.id);
+  }
+  if (typeof courseId === "number") {
+    return tous.filter((j) => j.courseId === courseId);
+  }
+  return tous;
+}
+
+export async function dossierSoumettreJustificatif(
+  corps: SoumissionJustificatif,
+): Promise<JustificatifAbsence> {
+  await delai(140);
+  const utilisateur = sessionMemoire?.utilisateur;
+  if (!utilisateur) {
+    throw new ApiError({
+      message: "Session expirée. Veuillez vous reconnecter.",
+      statusCode: 401,
+    });
+  }
+
+  const seance = presencesDossier.find((s) => s.id === corps.seanceId);
+  if (!seance) {
+    throw new ApiError({
+      message: "Séance introuvable pour le dépôt de justificatif.",
+      statusCode: 404,
+    });
+  }
+  const cours = UE_CAHIER.find((c) => c.ueId === seance.courseId);
+  const fiche = ETUDIANTS_DOSSIER.find((e) => e.id === utilisateur.id);
+  const liste = lireJustificatifsMock();
+  const prochainId =
+    liste.reduce((max, item) => Math.max(max, item.id), 500) + 1;
+
+  const nouveau: JustificatifAbsence = {
+    id: prochainId,
+    seanceId: seance.id,
+    courseId: seance.courseId,
+    codeUe: cours?.code ?? "UE",
+    intituleUe: cours?.intitule ?? "Unité d'enseignement",
+    dateSeance: seance.date,
+    libelleSeance: seance.libelle,
+    etudiantId: utilisateur.id,
+    etudiantNom: fiche?.nom ?? utilisateur.nom,
+    etudiantPrenom: fiche?.prenom ?? utilisateur.prenom,
+    etudiantIdentifiant: fiche?.identifiant ?? `ETU-${utilisateur.id}`,
+    motif: corps.motif.trim(),
+    nomFichier: corps.nomFichier.trim(),
+    typeMime: corps.typeMime,
+    tailleOctets: corps.tailleOctets,
+    statut: "en_attente",
+    commentaireValidation: null,
+    deposeLe: new Date().toISOString(),
+    traiteLe: null,
+  };
+
+  liste.unshift(nouveau);
+  ecrireJustificatifsMock(liste);
+  return nouveau;
+}
+
+export async function dossierTraiterJustificatif(
+  justificatifId: number,
+  corps: {
+    statut: Exclude<StatutJustificatif, "en_attente">;
+    commentaireValidation?: string;
+  },
+): Promise<JustificatifAbsence> {
+  await delai(120);
+  const liste = lireJustificatifsMock();
+  const cible = liste.find((j) => j.id === justificatifId);
+  if (!cible) {
+    throw new ApiError({
+      message: "Justificatif introuvable.",
+      statusCode: 404,
+    });
+  }
+
+  cible.statut = corps.statut;
+  cible.commentaireValidation = corps.commentaireValidation?.trim() || null;
+  cible.traiteLe = new Date().toISOString();
+
+  if (corps.statut === "valide") {
+    const seance = presencesDossier.find((s) => s.id === cible.seanceId);
+    if (seance) {
+      seance.etudiantStatuts[cible.etudiantId] = "justifie";
+      seance.marques = Object.keys(seance.etudiantStatuts).length;
+    }
+  }
+
+  ecrireJustificatifsMock(liste);
+  return cible;
 }
 
 /* ================================================================== */
@@ -2638,7 +3227,7 @@ const COMMENTAIRES_MODERATION: CommentaireAModerer[] = [
   },
 ];
 
-let commentairesMemoire: CommentaireAModerer[] = COMMENTAIRES_MODERATION.map(
+const commentairesMemoire: CommentaireAModerer[] = COMMENTAIRES_MODERATION.map(
   (c) => ({ ...c }),
 );
 
@@ -2688,9 +3277,6 @@ export async function scolariteTableauDeBord(): Promise<TableauDeBordScolarite> 
   const ouvertes = campagnesGestionMemoire.filter(
     (c) => c.statut === "ouverte",
   ).length;
-  const aCloturer = campagnesGestionMemoire.filter(
-    (c) => c.statut === "ouverte" && new Date(c.fin) < new Date(),
-  );
   return {
     campagnesOuvertes: ouvertes,
     comptesSansMotDePasse: COMPTES_SANS_MDP.length,
@@ -3287,6 +3873,7 @@ export async function scolariteVerifierImport(
     anneeUniversitaire?: string;
   },
 ): Promise<RapportImport> {
+  void _contexte;
   await delai();
   if (type === "catalogue" || type === "presences") {
     throw new ApiError({
@@ -3381,8 +3968,10 @@ export async function scolariteValiderImport(
 
 export async function archivesAnnuelles(): Promise<ArchiveAnnuelle[]> {
   await delai();
-  return archivesMemoire.map(({ snapshot: _snapshot, ...archive }) => ({
-    ...archive,
+  return archivesMemoire.map(({ anneeUniversitaire, archiveLe, archivePar }) => ({
+    anneeUniversitaire,
+    archiveLe,
+    archivePar,
   }));
 }
 
@@ -3478,6 +4067,7 @@ export async function scolariteRestitution(
   id: number,
   _corps: RestitutionEntree,
 ): Promise<CampagneGestion> {
+  void _corps;
   await delai();
   const idx = campagnesGestionMemoire.findIndex((c) => c.id === id);
   if (idx === -1)

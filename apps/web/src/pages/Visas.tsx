@@ -4,7 +4,7 @@ import { CheckCircle2, MessageSquare, Send, Stamp, BookOpen } from 'lucide-react
 import { api, ApiError } from '@/api';
 import { useConfirmation } from '@/components/useConfirmation';
 import type { Seance } from '@/api/types';
-import { PageHeader, Button, Alert, Badge } from '@/components/ui';
+import { PageHeader, Button, Alert } from '@/components/ui';
 
 const LIBELLES_STATUT: Record<string, string> = {
   tenue: 'Tenue',
@@ -188,40 +188,34 @@ export function Visas() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="bg-white border border-enp-border divide-y divide-enp-border">
           {seances.map((s) => (
-            <article
-              key={s.id}
-              className="bg-white border border-enp-border border-l-4 border-l-[#D97706] p-4 sm:p-5 space-y-3 shadow-xs"
-            >
+            <article key={s.id} className="p-3.5 sm:p-4 space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs font-bold bg-enp-blue-light text-enp-blue-deep border border-enp-blue-primary/20 px-2 py-0.5">
-                    {s.ueCode}
-                  </span>
-                  <Badge variant="outline">
-                    {s.type}
-                    {s.groupe ? ` (${s.groupe})` : ''}
-                  </Badge>
-                  <Badge variant="neutral">{LIBELLES_STATUT[s.statut] ?? s.statut}</Badge>
-                </div>
-                <span className="text-xs font-semibold text-enp-gray-medium">
-                  {formaterDate(s.date)} • {s.debut} - {s.fin}
+                <p className="font-mono text-[11px] text-enp-gray-medium tabular-nums">
+                  <span className="font-bold text-enp-blue-primary">{s.ueCode}</span>
+                  {' · '}
+                  {s.type}
+                  {s.groupe ? ` (${s.groupe})` : ''}
+                  {' · '}
+                  {LIBELLES_STATUT[s.statut] ?? s.statut}
+                </p>
+                <span className="text-xs font-mono text-enp-gray-medium tabular-nums">
+                  {formaterDate(s.date)} · {s.debut}-{s.fin}
                 </span>
               </div>
 
               <div>
-                <h2 className="text-base font-bold text-enp-blue-deep">
+                <h2 className="text-sm sm:text-base font-bold text-enp-blue-deep">
                   {s.intitule ?? 'Sans intitulé'}
                 </h2>
                 <p className="text-xs text-enp-gray-medium">{s.ueIntitule}</p>
               </div>
 
               {s.contenu && (
-                <div className="text-xs sm:text-sm text-enp-black bg-enp-bg border border-enp-border p-3 leading-relaxed">
-                  <strong className="text-enp-blue-deep">Contenu : </strong>
+                <p className="text-xs sm:text-sm text-enp-gray-dark leading-relaxed">
                   {s.contenu}
-                </div>
+                </p>
               )}
 
               {s.travailAFaire && (

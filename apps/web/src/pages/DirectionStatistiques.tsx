@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  AlertCircle,
-  BarChart3,
   Building2,
-  CheckCircle2,
   RefreshCw,
   Send,
   Users,
-  ShieldAlert,
   Globe2,
-  FileCheck2,
   Award,
 } from 'lucide-react';
 import {
@@ -269,7 +264,7 @@ export function DirectionStatistiques() {
             </h2>
             {/* Vue mobile (< 640px) */}
             <div className="block sm:hidden divide-y divide-enp-border">
-              {statistiques.campus.map((d: any) => (
+              {statistiques.campus.map((d) => (
                 <div key={d.campusId} className="py-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-sm text-enp-blue-deep">{d.campus}</span>
@@ -297,32 +292,32 @@ export function DirectionStatistiques() {
 
             {/* Tableau desktop (>= 640px) */}
             <div className="hidden sm:block">
-              <Table
+              <Table<StatistiquesDirectionType['campus'][number]>
                 columns={[
                   { key: 'campus', header: 'Campus / Département' },
                   {
                     key: 'coursSynthesables',
                     header: 'UE au catalogue',
                     align: 'center',
-                    render: (d: any) => <span>{d.coursSynthesables}</span>,
+                    render: (d) => <span>{d.coursSynthesables}</span>,
                   },
                   {
                     key: 'inscriptions',
                     header: 'Inscrits',
                     align: 'center',
-                    render: (d: any) => <span>{d.inscriptions}</span>,
+                    render: (d) => <span>{d.inscriptions}</span>,
                   },
                   {
                     key: 'bulletins',
                     header: 'Bulletins reçus',
                     align: 'center',
-                    render: (d: any) => <span className="font-bold text-enp-blue-deep">{d.bulletins}</span>,
+                    render: (d) => <span className="font-bold text-enp-blue-deep">{d.bulletins}</span>,
                   },
                   {
                     key: 'taux',
                     header: 'Taux participation',
                     align: 'center',
-                    render: (d: any) => (
+                    render: (d) => (
                       <span className="font-bold text-enp-green-valid">
                         {d.tauxParticipation !== null ? `${d.tauxParticipation.toFixed(1)}%` : '-'}
                       </span>
@@ -332,7 +327,7 @@ export function DirectionStatistiques() {
                     key: 'satisfaction',
                     header: 'Moyenne d’évaluation',
                     align: 'right',
-                    render: (d: any) => (
+                    render: (d) => (
                       <span className="font-bold">
                         {d.moyenneEvaluations !== null ? `${d.moyenneEvaluations.toFixed(2)} / 5` : '-'}
                       </span>
@@ -340,7 +335,7 @@ export function DirectionStatistiques() {
                   },
                 ]}
                 data={statistiques.campus}
-                keyExtractor={(d: any) => d.campusId}
+                keyExtractor={(d) => d.campusId}
               />
             </div>
           </div>

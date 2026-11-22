@@ -20,7 +20,7 @@ export function Badge({
     primary: 'bg-enp-blue-light text-enp-blue-deep border-enp-blue-primary/20',
     institutional: 'bg-enp-blue-ice text-enp-blue-deep border-enp-blue-primary/30',
     success: 'bg-enp-green-light text-enp-green-valid border-enp-green-valid/20',
-    warning: 'bg-[#F3E8FF] text-[#5B21B6] border-[#DDD6FE]',
+    warning: 'bg-amber-50 text-amber-800 border-amber-200',
     danger: 'bg-enp-red-light text-enp-red-error border-enp-red-error/20',
     violet: 'bg-enp-violet-soft text-[#5B21B6] border-enp-violet/30',
     outline: 'bg-white text-enp-gray-dark border-enp-border',

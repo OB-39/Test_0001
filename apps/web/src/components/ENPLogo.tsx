@@ -18,9 +18,9 @@ export function ENPLogo({
   const isLight = variant === 'light';
 
   const logoHeights = {
-    sm: 'h-10 sm:h-12 lg:h-14',
-    md: 'h-12 sm:h-14 lg:h-16',
-    lg: 'h-16 sm:h-20 lg:h-24',
+    sm: 'h-8 sm:h-10 lg:h-11',
+    md: 'h-9 sm:h-11 lg:h-12',
+    lg: 'h-14 sm:h-18 lg:h-22',
   };
 
   const armoiriesHeights = {

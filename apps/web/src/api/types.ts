@@ -340,6 +340,79 @@ export interface PresencesEtudiant {
   presences: PresenceEtudiantLigne[];
 }
 
+export interface ArriveePresenceRecente {
+  etudiantId: number;
+  nom: string;
+  prenom: string;
+  identifiant: string | null;
+  scanneA: string;
+}
+
+export interface SessionQrPresence {
+  sessionId: number;
+  seanceId: number;
+  courseId: number;
+  codeUe: string;
+  intituleUe: string;
+  libelleSeance: string;
+  dateSeance: string;
+  statut: "ouverte" | "pause" | "fermee";
+  ouvertA: string;
+  fermeA: string | null;
+  dureeValiditeSecondes: number;
+  token: string;
+  counter: number;
+  timestampMs: number;
+  expireDansMs: number;
+  presents: number;
+  inscrits: number;
+  recents: ArriveePresenceRecente[];
+}
+
+export interface ResultatScanPresence {
+  ok: true;
+  seanceId: number;
+  codeUe: string;
+  intituleUe: string;
+  libelleSeance: string;
+  dateSeance: string;
+  scanneA: string;
+  statut: "present";
+  message: string;
+}
+
+export type StatutJustificatif = "en_attente" | "valide" | "refuse";
+
+export interface JustificatifAbsence {
+  id: number;
+  seanceId: number;
+  courseId: number;
+  codeUe: string;
+  intituleUe: string;
+  dateSeance: string;
+  libelleSeance: string;
+  etudiantId: number;
+  etudiantNom: string;
+  etudiantPrenom: string;
+  etudiantIdentifiant: string;
+  motif: string;
+  nomFichier: string;
+  typeMime: string;
+  tailleOctets: number;
+  statut: StatutJustificatif;
+  commentaireValidation: string | null;
+  deposeLe: string;
+  traiteLe: string | null;
+}
+
+export interface SoumissionJustificatif {
+  seanceId: number;
+  motif: string;
+  nomFichier: string;
+  typeMime: string;
+  tailleOctets: number;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Pilotage (chef de département)                                     */
 /* ------------------------------------------------------------------ */

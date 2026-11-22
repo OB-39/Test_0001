@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Send,
   CheckCircle2,
-  Info,
   Check,
 } from 'lucide-react';
 import { api, ApiError } from '@/api';
@@ -22,7 +21,6 @@ import {
   PageHeader,
   Stepper,
   Textarea,
-  InfoBubble,
 } from '@/components/ui';
 
 const OPTIONS_NOTATION: { valeur: Note; libelle: string; code: string }[] = [
@@ -277,42 +275,33 @@ export function EvaluationUE() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5 animate-fade-in pb-6">
-      <div className="flex items-center justify-between gap-2">
+    <div className="max-w-4xl mx-auto space-y-4 animate-fade-in pb-6">
+      <div className="flex items-center justify-between gap-2 text-xs">
         <Link
           to="/evaluations"
-          className="inline-flex items-center gap-1.5 text-xs text-enp-blue-primary hover:text-enp-blue-deep font-semibold"
+          className="inline-flex items-center gap-1.5 text-enp-blue-primary hover:text-enp-blue-deep font-semibold"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Quitter (brouillon sauvegardé)
+          Retour aux UE
         </Link>
 
-        <div className="flex items-center gap-3">
+        <span className="text-[11px] text-enp-gray-medium flex items-center gap-1.5">
+          <span>Scrutin anonyme</span>
           {dernierEnregistrement && (
-            <span className="text-[11px] text-enp-green-valid font-medium flex items-center gap-1">
-              <Check className="w-3.5 h-3.5 stroke-[3]" />
-              Sauvegardé ({dernierEnregistrement})
-            </span>
+            <>
+              <span>·</span>
+              <span className="text-enp-green-valid inline-flex items-center gap-0.5 font-medium">
+                <Check className="w-3 h-3 stroke-[3]" />
+                {dernierEnregistrement}
+              </span>
+            </>
           )}
-          <InfoBubble
-            triggerVariant="pill"
-            triggerLabel="Anonymat garanti"
-            title="Protocole d'évaluation anonyme (ENP)"
-            badge="SCRUTIN ANONYME"
-            icon="shield"
-            duration={7000}
-            content={
-              <p className="text-xs leading-relaxed">
-                Un jeton cryptographique à usage unique protège votre vote. Vos réponses sont déposées dans une urne isolée sans aucun lien avec votre identité.
-              </p>
-            }
-          />
-        </div>
+        </span>
       </div>
 
       <PageHeader
-        title={`${ue?.code} • ${ue?.intitule}`}
-        description={`Progression : ${nbRepondu} / ${totalCriteres} critères renseignés`}
+        title={`${ue?.code} · ${ue?.intitule}`}
+        description={`${nbRepondu} / ${totalCriteres} critères renseignés`}
       />
 
       <Stepper
@@ -329,37 +318,37 @@ export function EvaluationUE() {
       />
 
       {phase === 'section' ? (
-        <div className="bg-white border border-enp-border p-4 sm:p-6 space-y-5 shadow-xs">
+        <div className="bg-white border border-enp-border p-3.5 sm:p-5 space-y-4">
           {(() => {
             const sectionCourante = questionnaire.sections[indexSection];
             return (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-enp-border pb-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-enp-border pb-2.5">
                   <div>
-                    <span className="text-xs font-bold text-enp-blue-primary uppercase tracking-wider">
-                      Section {sectionCourante.code} sur {totalSections}
+                    <span className="text-[11px] font-semibold text-enp-blue-primary uppercase tracking-wider">
+                      Section {sectionCourante.code} / {totalSections}
                     </span>
-                    <h2 className="text-base sm:text-lg font-bold text-enp-black">
+                    <h2 className="text-sm sm:text-base font-bold text-enp-black">
                       {sectionCourante.titre}
                     </h2>
                   </div>
                   <span className="text-[11px] text-enp-gray-medium">
-                    1 = Pas du tout d'accord • 5 = Tout à fait d'accord
+                    1 = Pas d'accord · 5 = Très bien
                   </span>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {sectionCourante.criteres.map((critere, critIdx) => {
                     const noteActuelle = reponses[critere.id];
 
                     return (
                       <div
                         key={critere.id}
-                        className="p-3.5 sm:p-4 border border-enp-border bg-[#FAFAFA] space-y-2.5"
+                        className="p-3 sm:p-3.5 border border-enp-border bg-[#FAFAFA] space-y-2.5"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs sm:text-sm font-semibold text-enp-black leading-snug">
-                            <span className="font-mono font-bold text-enp-blue-primary mr-2">
+                          <p className="text-xs sm:text-sm font-medium text-enp-black leading-snug">
+                            <span className="font-mono font-bold text-enp-blue-primary mr-1.5">
                               {critIdx + 1}.
                             </span>
                             {critere.libelle}
@@ -369,7 +358,7 @@ export function EvaluationUE() {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-6 gap-1.5">
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                           {OPTIONS_NOTATION.map((opt) => {
                             const estSelectionne = noteActuelle === opt.valeur;
                             return (
@@ -377,17 +366,17 @@ export function EvaluationUE() {
                                 key={String(opt.valeur)}
                                 type="button"
                                 onClick={() => setNote(critere.id, opt.valeur)}
-                                className={`py-2 px-1 border text-center transition-all select-none flex flex-col items-center justify-center ${
+                                className={`py-2 px-1.5 border text-center transition-colors select-none flex flex-col items-center justify-center min-h-[44px] ${
                                   estSelectionne
-                                    ? 'bg-enp-blue-primary text-white border-enp-blue-primary font-bold shadow-xs'
+                                    ? 'bg-enp-blue-primary text-white border-enp-blue-primary font-bold'
                                     : 'bg-white text-enp-black border-enp-border hover:border-enp-blue-primary/60 hover:bg-enp-blue-ice/30'
                                 }`}
                               >
-                                <span className="text-xs sm:text-sm font-bold leading-tight">
+                                <span className="text-xs sm:text-sm font-bold leading-tight tabular-nums">
                                   {opt.code}
                                 </span>
                                 <span
-                                  className={`text-[9px] sm:text-[10px] leading-tight mt-0.5 truncate max-w-full ${
+                                  className={`text-[10px] leading-tight mt-0.5 truncate max-w-full ${
                                     estSelectionne ? 'text-white/95' : 'text-enp-gray-medium'
                                   }`}
                                 >
@@ -402,7 +391,7 @@ export function EvaluationUE() {
                   })}
                 </div>
 
-                <div className="pt-4 border-t border-enp-border flex items-center justify-between gap-3">
+                <div className="pt-3 border-t border-enp-border flex items-center justify-between gap-3">
                   <Button
                     variant="outline"
                     size="md"
@@ -425,9 +414,7 @@ export function EvaluationUE() {
                     }}
                     rightIcon={<ArrowRight className="w-4 h-4" />}
                   >
-                    {indexSection < totalSections - 1
-                      ? 'Section suivante'
-                      : 'Terminer & déposer'}
+                    {indexSection < totalSections - 1 ? 'Suivant' : 'Terminer'}
                   </Button>
                 </div>
               </>
@@ -435,36 +422,26 @@ export function EvaluationUE() {
           })()}
         </div>
       ) : (
-        /* ÉTAPE FINALE UNIFIÉE : COMMENTAIRES + DÉPÔT DU BULLETIN */
-        <div className="bg-white border border-enp-border p-5 sm:p-6 space-y-5 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-enp-border pb-3">
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-enp-blue-deep">
-                Observations facultatives & Dépôt définitif
-              </h2>
-              <p className="text-xs text-enp-gray-medium">
-                {nbRepondu} sur {totalCriteres} critères évalués • Vos remarques sont anonymes.
-              </p>
-            </div>
+        /* Etape finale : observations + depot */
+        <div className="bg-white border border-enp-border p-4 sm:p-5 space-y-4">
+          <div className="border-b border-enp-border pb-2.5">
+            <h2 className="text-sm sm:text-base font-bold text-enp-blue-deep">
+              Observations facultatives & Dépôt
+            </h2>
+            <p className="text-xs text-enp-gray-medium mt-0.5 tabular-nums">
+              {nbRepondu} / {totalCriteres} critères évalués · Ne mentionnez aucune donnée personnelle.
+            </p>
           </div>
 
-          <Alert
-            variant="institutional"
-            title="Respect de l'anonymat"
-            icon={<Info className="w-4 h-4 text-enp-gold shrink-0 mt-0.5" />}
-          >
-            Ne mentionnez aucun nom, prénom ou élément personnel permettant de vous identifier.
-          </Alert>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <Textarea
-              label="Points forts de l'enseignement (facultatif)"
+              label="Points forts (facultatif)"
               value={pointsForts}
               onChange={(e) => setPointsForts(e.target.value)}
               maxLength={MAX_COMMENTAIRE}
               maxLengthIndicator={true}
               rows={3}
-              placeholder="Clarté du cours, qualité des supports, disponibilité..."
+              placeholder="Clarté du cours, supports, disponibilité..."
             />
 
             <Textarea

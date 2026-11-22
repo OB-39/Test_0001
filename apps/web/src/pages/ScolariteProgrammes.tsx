@@ -279,7 +279,7 @@ export function ScolariteProgrammes() {
       title: "Supprimer cette UE ?",
       message: (
         <p>
-          L’UE « {ue.code} — {ue.intitule} » sera retirée du catalogue. La
+          L’UE « {ue.code} · {ue.intitule} » sera retirée du catalogue. La
           suppression est irréversible et sera refusée si un cours la référence.
           {ue.composantes.length > 0 &&
             " Les liens de regroupement avec ses composantes seront également retirés."}
@@ -315,77 +315,133 @@ export function ScolariteProgrammes() {
     ]);
 
     return (
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="border-b border-enp-border text-xs uppercase text-enp-gray-medium">
-            <tr>
-              <th className="px-3 py-2">Code</th>
-              <th className="px-3 py-2">Intitulé</th>
-              <th className="px-3 py-2">Crédits</th>
-              <th className="px-3 py-2">Périmètre</th>
-              <th className="px-3 py-2 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-enp-border">
-            {lignes.map(({ ue, estComposante }) => (
-              <tr
-                key={`${ue.id}-${estComposante ? "composante" : "ue"}`}
-                className={estComposante ? "bg-slate-50" : undefined}
-              >
-                <td
-                  className={`px-3 py-3 font-mono font-medium ${
-                    estComposante ? "pl-8" : ""
-                  }`}
+      <>
+        {/* VUE MOBILE NATIVE DES UE */}
+        <div className="block md:hidden divide-y divide-enp-border border-t border-enp-border">
+          {lignes.map(({ ue, estComposante }) => (
+            <div
+              key={`${ue.id}-${estComposante ? "composante" : "ue"}-m`}
+              className={`py-3 space-y-2 ${estComposante ? "pl-4 bg-slate-50/70" : ""}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-enp-gray-medium flex flex-wrap items-center gap-x-1.5">
+                    <span className="font-mono font-semibold text-enp-blue-deep">
+                      {estComposante ? "↳ " : ""}
+                      {ue.code}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="tabular-nums">
+                      {ue.composantes.length > 0 ? "UE composite" : `${ue.credits} cr.`}
+                    </span>
+                  </p>
+                  <p className="text-sm font-semibold text-enp-black leading-snug mt-0.5">
+                    {ue.intitule}
+                  </p>
+                  <p className="text-xs text-enp-gray-medium mt-0.5">
+                    {ue.modifiable ? "Modifiable" : "Utilisée sur un autre campus"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="min-h-[36px]"
+                  disabled={enCours || !ue.modifiable}
+                  onClick={() => ouvrirEditionUe(ue)}
+                  leftIcon={<Pencil className="h-3.5 w-3.5" />}
                 >
-                  {estComposante ? "↳ " : ""}
-                  {ue.code}
-                  {ue.composantes.length > 0 && (
-                    <span className="ml-2 font-sans text-xs text-enp-blue-primary">
-                      UE composite — regroupement, non comptée séparément
-                    </span>
-                  )}
-                  {estComposante && (
-                    <span className="ml-2 font-sans text-xs text-enp-gray-medium">
-                      composante
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-3">{ue.intitule}</td>
-                <td className="px-3 py-3">
-                  {ue.composantes.length > 0 ? "—" : ue.credits}
-                </td>
-                <td className="px-3 py-3">
-                  {ue.modifiable
-                    ? "Modifiable"
-                    : "Utilisée sur un autre campus"}
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      disabled={enCours || !ue.modifiable}
-                      onClick={() => ouvrirEditionUe(ue)}
-                      leftIcon={<Pencil className="h-3.5 w-3.5" />}
-                    >
-                      Modifier
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="xs"
-                      disabled={enCours}
-                      onClick={() => void supprimerUe(ue)}
-                      leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                    >
-                      Supprimer
-                    </Button>
-                  </div>
-                </td>
+                  Modifier
+                </Button>
+                <Button
+                  variant="danger"
+                  size="xs"
+                  className="min-h-[36px]"
+                  disabled={enCours}
+                  onClick={() => void supprimerUe(ue)}
+                  leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                >
+                  Supprimer
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* VUE BUREAU DES UE */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-enp-border text-xs text-enp-gray-medium bg-enp-bg">
+              <tr>
+                <th className="px-3 py-2.5 font-semibold">Code</th>
+                <th className="px-3 py-2.5 font-semibold">Intitulé</th>
+                <th className="px-3 py-2.5 font-semibold text-right">Crédits</th>
+                <th className="px-3 py-2.5 font-semibold">Périmètre</th>
+                <th className="px-3 py-2.5 font-semibold text-right">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-enp-border">
+              {lignes.map(({ ue, estComposante }) => (
+                <tr
+                  key={`${ue.id}-${estComposante ? "composante" : "ue"}`}
+                  className={estComposante ? "bg-slate-50" : undefined}
+                >
+                  <td
+                    className={`px-3 py-3 font-mono text-xs font-semibold text-enp-blue-deep ${
+                      estComposante ? "pl-8" : ""
+                    }`}
+                  >
+                    {estComposante ? "↳ " : ""}
+                    {ue.code}
+                    {ue.composantes.length > 0 && (
+                      <span className="ml-2 font-sans text-xs font-normal text-enp-blue-primary">
+                        UE composite (regroupement)
+                      </span>
+                    )}
+                    {estComposante && (
+                      <span className="ml-2 font-sans text-xs font-normal text-enp-gray-medium">
+                        composante
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 font-medium text-enp-black">{ue.intitule}</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums text-xs">
+                    {ue.composantes.length > 0 ? "-" : ue.credits}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-enp-gray-medium">
+                    {ue.modifiable
+                      ? "Modifiable"
+                      : "Utilisée sur un autre campus"}
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        disabled={enCours || !ue.modifiable}
+                        onClick={() => ouvrirEditionUe(ue)}
+                        leftIcon={<Pencil className="h-3.5 w-3.5" />}
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="xs"
+                        disabled={enCours}
+                        onClick={() => void supprimerUe(ue)}
+                        leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>
     );
   }
 
@@ -448,51 +504,90 @@ export function ScolariteProgrammes() {
                 Aucun programme n’est encore enregistré.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[620px] text-left text-sm">
-                  <thead className="border-b border-enp-border text-xs uppercase text-enp-gray-medium">
-                    <tr>
-                      <th className="px-3 py-2">Programme</th>
-                      <th className="px-3 py-2">Département</th>
-                      <th className="px-3 py-2">Campus</th>
-                      <th className="px-3 py-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-enp-border">
-                    {programmes.map((programme) => (
-                      <tr key={programme.id}>
-                        <td className="px-3 py-3 font-medium">
+              <>
+                <div className="block md:hidden divide-y divide-enp-border border-t border-enp-border">
+                  {programmes.map((programme) => (
+                    <div key={`${programme.id}-m`} className="py-3 space-y-2">
+                      <div>
+                        <p className="text-sm font-semibold text-enp-black">
                           {programme.nom}
-                        </td>
-                        <td className="px-3 py-3">{programme.departement}</td>
-                        <td className="px-3 py-3">{programme.campus}</td>
-                        <td className="px-3 py-3">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="xs"
-                              disabled={enCours}
-                              onClick={() => ouvrirEditionProgramme(programme)}
-                              leftIcon={<Pencil className="h-3.5 w-3.5" />}
-                            >
-                              Modifier
-                            </Button>
-                            <Button
-                              variant="danger"
-                              size="xs"
-                              disabled={enCours}
-                              onClick={() => void supprimerProgramme(programme)}
-                              leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                            >
-                              Supprimer
-                            </Button>
-                          </div>
-                        </td>
+                        </p>
+                        <p className="text-xs text-enp-gray-medium mt-0.5">
+                          {programme.departement} · {programme.campus}
+                        </p>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          className="min-h-[36px]"
+                          disabled={enCours}
+                          onClick={() => ouvrirEditionProgramme(programme)}
+                          leftIcon={<Pencil className="h-3.5 w-3.5" />}
+                        >
+                          Modifier
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="xs"
+                          className="min-h-[36px]"
+                          disabled={enCours}
+                          onClick={() => void supprimerProgramme(programme)}
+                          leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                        >
+                          Supprimer
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-enp-border text-xs text-enp-gray-medium bg-enp-bg">
+                      <tr>
+                        <th className="px-3 py-2.5 font-semibold">Programme</th>
+                        <th className="px-3 py-2.5 font-semibold">Département</th>
+                        <th className="px-3 py-2.5 font-semibold">Campus</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-enp-border">
+                      {programmes.map((programme) => (
+                        <tr key={programme.id}>
+                          <td className="px-3 py-3 font-medium">
+                            {programme.nom}
+                          </td>
+                          <td className="px-3 py-3 text-enp-gray-dark">{programme.departement}</td>
+                          <td className="px-3 py-3 text-enp-gray-medium">{programme.campus}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="xs"
+                                disabled={enCours}
+                                onClick={() => ouvrirEditionProgramme(programme)}
+                                leftIcon={<Pencil className="h-3.5 w-3.5" />}
+                              >
+                                Modifier
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="xs"
+                                disabled={enCours}
+                                onClick={() => void supprimerProgramme(programme)}
+                                leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                              >
+                                Supprimer
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
 
@@ -528,8 +623,8 @@ export function ScolariteProgrammes() {
                     key={programme.id}
                     className="space-y-2 border border-enp-border p-3"
                   >
-                    <h3 className="font-semibold text-enp-blue-deep">
-                      {programme.nom} — {programme.departement}
+                    <h3 className="font-semibold text-enp-blue-deep text-sm">
+                      {programme.nom} · {programme.departement}
                     </h3>
                     {tableauUes(uesProgramme)}
                   </section>
@@ -723,7 +818,7 @@ export function ScolariteProgrammes() {
                     )
                     .map((ue) => (
                       <option key={ue.id} value={ue.id}>
-                        {ue.code} — {ue.intitule}
+                        {ue.code} · {ue.intitule}
                       </option>
                     ))}
                 </select>

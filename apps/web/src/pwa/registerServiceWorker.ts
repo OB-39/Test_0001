@@ -4,12 +4,30 @@ export function registerServiceWorker() {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-          console.log('[PWA ENP] Service Worker actif, scope :', registration.scope);
+          if (registration.waiting) {
+            window.dispatchEvent(
+              new CustomEvent('enp-sw-update', { detail: { registration } }),
+            );
+          }
+
+          registration.addEventListener('updatefound', () => {
+            const nouveauWorker = registration.installing;
+            if (!nouveauWorker) return;
+            nouveauWorker.addEventListener('statechange', () => {
+              if (
+                nouveauWorker.state === 'installed' &&
+                navigator.serviceWorker.controller
+              ) {
+                window.dispatchEvent(
+                  new CustomEvent('enp-sw-update', { detail: { registration } }),
+                );
+              }
+            });
+          });
         })
-        .catch((error) => {
-          console.warn('[PWA ENP] Enregistrement Service Worker :', error);
+        .catch(() => {
+          // Enregistrement Service Worker non critique
         });
     });
   }
 }
-

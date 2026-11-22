@@ -4,14 +4,8 @@ import {
   ArrowLeft,
   Printer,
   ShieldCheck,
-  BarChart3,
-  Users,
-  Award,
   CheckCircle2,
-  Info,
   TrendingUp,
-  MessageSquare,
-  FileText,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -28,14 +22,10 @@ import {
 import { api, ApiError } from '@/api';
 import type { ResultatUe } from '@/api/types';
 import {
-  PageHeader,
   Button,
   Badge,
-  ProgressBar,
   Alert,
-  StatCard,
   ChartCard,
-  Table,
 } from '@/components/ui';
 
 const SECTIONS_LIBELLES: Record<string, string> = {
@@ -93,7 +83,6 @@ export function FicheResultatUE() {
   const donneesDistributionGlobale = useMemo(() => {
     if (!resultat || !resultat.detailDisponible) return [];
     const totaux = [0, 0, 0, 0, 0];
-    let sansAvis = 0;
 
     for (const sec of resultat.sections) {
       for (const crit of sec.criteres) {
@@ -104,7 +93,6 @@ export function FicheResultatUE() {
           totaux[3] += crit.distribution[3] || 0;
           totaux[4] += crit.distribution[4] || 0;
         }
-        sansAvis += crit.sansAvis || 0;
       }
     }
 
@@ -159,9 +147,9 @@ export function FicheResultatUE() {
       : '-';
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto animate-fade-in print-area">
+    <div className="space-y-4 sm:space-y-5 max-w-6xl mx-auto animate-fade-in print-area pb-6">
       {/* Barre d'action supérieure (masquée lors de l'impression papier) */}
-      <div className="no-print flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="no-print flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         <Link
           to="/resultats"
           className="inline-flex items-center gap-1.5 text-xs text-enp-blue-primary hover:text-enp-blue-deep font-medium py-1"
@@ -173,75 +161,79 @@ export function FicheResultatUE() {
         <Button
           variant="outline"
           size="sm"
-          className="w-full sm:w-auto justify-center"
+          className="w-full sm:w-auto justify-center min-h-[40px]"
           onClick={() => window.print()}
           leftIcon={<Printer className="w-4 h-4" />}
         >
-          Imprimer le rapport officiel (PDF)
+          Imprimer (PDF)
         </Button>
       </div>
 
       {/* En-tête officiel du rapport académique */}
-      <div className="bg-white border border-enp-border p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-enp-border pb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-xs font-bold text-enp-blue-deep bg-enp-blue-light px-2 py-0.5 border border-enp-blue-primary/20">
+      <div className="bg-white border border-enp-border overflow-hidden">
+        <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-enp-border">
+          <div className="min-w-0">
+            <p className="text-xs text-enp-gray-medium flex flex-wrap items-center gap-x-1.5">
+              <span className="font-mono font-semibold text-enp-blue-deep">
                 {resultat.code}
               </span>
-              <span className="text-xs text-enp-gray-medium font-semibold">
-                Rapport d'Évaluation Pédagogique
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold font-serif text-enp-black">
+              <span aria-hidden="true">·</span>
+              <span>Rapport d'évaluation pédagogique</span>
+            </p>
+            <h1 className="text-lg sm:text-2xl font-bold font-serif text-enp-black mt-1 text-balance">
               {resultat.intitule}
             </h1>
             <p className="text-xs text-enp-gray-medium mt-1">
-              École Nationale Polytechnique • Session Académique 2026-2027
+              École Nationale Polytechnique · Session 2026-2027
             </p>
           </div>
 
-          <div className="flex sm:flex-col items-end gap-1 text-right">
-            <span className="text-xs font-semibold text-enp-gray-medium">Statut du quorum :</span>
+          <div className="shrink-0">
             <Badge variant={resultat.detailDisponible ? 'success' : 'warning'}>
               {resultat.detailDisponible ? 'Quorum atteint (≥ 5)' : 'Seuil d\'anonymat non atteint'}
             </Badge>
           </div>
         </div>
 
-        {/* Indicateurs clés de participation */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
-          <div className="p-3 bg-enp-blue-ice/40 border border-enp-border">
-            <span className="text-enp-gray-medium block text-xs">Étudiants inscrits</span>
-            <span className="text-lg font-bold text-enp-black">{resultat.inscrits}</span>
+        {/* Indicateurs clés unifiés */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 divide-x divide-enp-border">
+          <div className="p-3 sm:p-4">
+            <span className="text-enp-gray-medium block text-xs">Inscrits</span>
+            <span className="text-lg sm:text-xl font-bold font-mono tabular-nums text-enp-black mt-0.5 block">
+              {resultat.inscrits}
+            </span>
           </div>
-          <div className="p-3 bg-enp-blue-ice/40 border border-enp-border">
+          <div className="p-3 sm:p-4">
             <span className="text-enp-gray-medium block text-xs">Bulletins valides</span>
-            <span className="text-lg font-bold text-enp-blue-primary">{resultat.repondants}</span>
+            <span className="text-lg sm:text-xl font-bold font-mono tabular-nums text-enp-blue-primary mt-0.5 block">
+              {resultat.repondants}
+            </span>
           </div>
-          <div className="p-3 bg-enp-blue-ice/40 border border-enp-border">
-            <span className="text-enp-gray-medium block text-xs">Taux de participation</span>
-            <span className="text-lg font-bold text-enp-green-valid">{pct}%</span>
+          <div className="p-3 sm:p-4">
+            <span className="text-enp-gray-medium block text-xs">Participation</span>
+            <span className="text-lg sm:text-xl font-bold font-mono tabular-nums text-enp-green-valid mt-0.5 block">
+              {pct}%
+            </span>
           </div>
-          <div className="p-3 bg-enp-blue-ice/40 border border-enp-border">
-            <span className="text-enp-gray-medium block text-xs">Moyenne synthétique</span>
-            <span className="text-lg font-bold text-enp-blue-deep">
-              {resultat.detailDisponible ? `${moyenneGlobale} / 5.0` : 'Masquée (< 5)'}
+          <div className="p-3 sm:p-4">
+            <span className="text-enp-gray-medium block text-xs">Moyenne</span>
+            <span className="text-lg sm:text-xl font-bold font-mono tabular-nums text-enp-blue-deep mt-0.5 block">
+              {resultat.detailDisponible ? `${moyenneGlobale} / 5` : 'Masquée'}
             </span>
           </div>
         </div>
       </div>
 
       {/* Mention réglementaire obligatoire permanente */}
-      <div className="p-3.5 bg-enp-gold-light border-l-4 border-enp-gold text-xs text-enp-black leading-relaxed">
-        <strong>Avertissement déontologique :</strong> « Résultats à visée exclusive d'amélioration pédagogique ; ils ne peuvent constituer, à eux seuls, un élément d'appréciation individuelle. »
+      <div className="p-3.5 bg-amber-50/70 border border-amber-200 text-xs text-enp-black leading-relaxed">
+        <strong className="font-semibold text-amber-900">Avertissement déontologique :</strong> « Résultats à visée exclusive d'amélioration pédagogique ; ils ne peuvent constituer, à eux seuls, un élément d'appréciation individuelle. »
       </div>
 
       {/* CAS 1 : QUORUM NON ATTEINT (< 5 RÉPONDANTS) */}
       {!resultat.detailDisponible && (
-        <div className="bg-[#FAF8F5] border border-enp-border p-6 space-y-3">
-          <div className="flex items-center gap-2 text-enp-blue-deep font-bold text-sm">
-            <ShieldCheck className="w-5 h-5 text-enp-gold" />
+        <div className="bg-[#FAF8F5] border border-enp-border p-4 sm:p-6 space-y-2.5">
+          <div className="flex items-center gap-2 text-enp-blue-deep font-semibold text-sm">
+            <ShieldCheck className="w-5 h-5 text-enp-gold shrink-0" />
             <span>Protection statutaire de l'anonymat des étudiants</span>
           </div>
           <p className="text-xs sm:text-sm text-enp-gray-dark leading-relaxed">
@@ -249,21 +241,20 @@ export function FicheResultatUE() {
             est inférieur au seuil réglementaire strict de <strong>5 répondants</strong> fixé par le Conseil de Direction de l'ENP.
           </p>
           <p className="text-xs sm:text-sm text-enp-gray-medium leading-relaxed">
-            Par conséquent, les moyennes détaillées, la distribution des notes et les commentaires qualitatifs ne sont pas diffusés
-            afin d'éliminer tout risque d'identification individuelle indirecte. Seul le taux de participation est consigné.
+            Les moyennes détaillées, la distribution des notes et les commentaires qualitatifs ne sont donc pas diffusés afin d'écarter tout risque d'identification indirecte.
           </p>
         </div>
       )}
 
       {/* CAS 2 : SEUIL ATTEINT (≥ 5 RÉPONDANTS) - RÉSULTATS COMPLETS */}
       {resultat.detailDisponible && (
-        <div className="space-y-6">
-          {/* Graphique 1 : Moyennes par section (Barres horizontales sobres) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="space-y-4 sm:space-y-5">
+          {/* Graphique 1 & 2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
             <div className="lg:col-span-7">
               <ChartCard
-                title="Moyennes par section pédagogique (sur 5.0)"
-                subtitle="Scores moyens calculés sur les 19 critères réglementaires"
+                title="Moyennes par section (sur 5.0)"
+                subtitle="Scores moyens sur les 19 critères réglementaires"
               >
                 <div className="h-64 w-full min-w-0" aria-label="Graphique des moyennes par section">
                   <ResponsiveContainer width="99%" height="100%">
@@ -276,7 +267,7 @@ export function FicheResultatUE() {
                       <XAxis type="number" domain={[0, 5]} tickCount={6} stroke="#6B7280" fontSize={11} />
                       <YAxis type="category" dataKey="code" stroke="#6B7280" fontSize={11} width={60} />
                       <Tooltip
-                        formatter={(val: any) => [`${val} / 5.0`, 'Moyenne']}
+                        formatter={(val: unknown) => [`${String(val ?? '')} / 5.0`, 'Moyenne']}
                         contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #D8DEE5', fontSize: '12px' }}
                       />
                       <Bar dataKey="moyenne" fill="#1a5fb4" barSize={18} />
@@ -286,11 +277,10 @@ export function FicheResultatUE() {
               </ChartCard>
             </div>
 
-            {/* Graphique 2 : Distribution globale des suffrages */}
             <div className="lg:col-span-5">
               <ChartCard
                 title="Distribution des appréciations"
-                subtitle="Répartition des suffrages formulés (Notes 1 à 5)"
+                subtitle="Répartition des suffrages (notes 1 à 5)"
               >
                 <div className="h-64 w-full min-w-0" aria-label="Histogramme des réponses de 1 à 5">
                   <ResponsiveContainer width="99%" height="100%">
@@ -299,7 +289,7 @@ export function FicheResultatUE() {
                       <XAxis dataKey="note" angle={-25} textAnchor="end" interval={0} stroke="#6B7280" fontSize={10} height={40} />
                       <YAxis stroke="#6B7280" fontSize={11} />
                       <Tooltip
-                        formatter={(val: any) => [val, 'Suffrages']}
+                        formatter={(val: unknown) => [String(val ?? ''), 'Suffrages']}
                         contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #D8DEE5', fontSize: '12px' }}
                       />
                       <Bar dataKey="effectif" fill="#2a9d4a" barSize={24} />
@@ -313,7 +303,7 @@ export function FicheResultatUE() {
           {/* Graphique 3 : Évolution historique des sessions */}
           <ChartCard
             title="Évolution pluriannuelle de l'enseignement"
-            subtitle="Historique de la satisfaction moyenne et du taux de participation sur les 5 dernières sessions"
+            subtitle="Satisfaction moyenne et taux de participation sur les 5 dernières sessions"
           >
             <div className="h-60 w-full min-w-0" aria-label="Courbe d'évolution historique">
               <ResponsiveContainer width="99%" height="100%">
@@ -331,61 +321,89 @@ export function FicheResultatUE() {
             </div>
           </ChartCard>
 
-          {/* Détails exhaustifs critère par critère */}
-          <div className="bg-white border border-enp-border p-6 space-y-6">
-            <h2 className="text-base font-bold text-enp-blue-deep border-b border-enp-border pb-3 uppercase tracking-wider">
-              Détail exhaustif des évaluations par critère
+          {/* Détails critère par critère */}
+          <div className="bg-white border border-enp-border p-4 sm:p-6 space-y-5">
+            <h2 className="text-sm sm:text-base font-semibold text-enp-blue-deep border-b border-enp-border pb-3">
+              Détail des évaluations par critère
             </h2>
 
             {resultat.sections.map((section) => (
-              <div key={section.code} className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-enp-blue-ice p-3 border border-enp-border">
+              <div key={section.code} className="space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 bg-enp-bg px-3.5 py-2.5 border border-enp-border">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-6 h-6 bg-enp-blue-primary text-white text-xs font-bold flex items-center justify-center shrink-0">
-                      {section.code}
+                    <span className="font-mono text-xs font-semibold text-enp-blue-deep shrink-0">
+                      {section.code}.
                     </span>
-                    <h3 className="text-sm font-bold text-enp-blue-deep truncate">
+                    <h3 className="text-sm font-semibold text-enp-black truncate">
                       {SECTIONS_LIBELLES[section.code] || section.titre}
                     </h3>
                   </div>
-                  <span className="text-xs font-bold text-enp-black shrink-0">
-                    Moyenne de section :{' '}
-                    <strong className="text-enp-blue-primary font-bold">
+                  <span className="text-xs text-enp-gray-dark shrink-0 font-mono tabular-nums">
+                    Moyenne :{' '}
+                    <strong className="text-enp-blue-primary font-semibold">
                       {section.moyenne !== null ? `${section.moyenne.toFixed(2)} / 5.0` : '-'}
                     </strong>
                   </span>
                 </div>
 
-                <div className="overflow-x-auto scrollbar-thin border border-enp-border">
-                  <table className="w-full text-left text-xs border-collapse min-w-[480px]">
-                    <thead className="bg-[#F8FAFC] border-b border-enp-border text-enp-gray-dark font-semibold">
+                {/* VUE MOBILE NATIVE DES CRITÈRES */}
+                <div className="block sm:hidden border border-enp-border divide-y divide-enp-border">
+                  {section.criteres.map((crit) => (
+                    <div key={crit.critereId} className="p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-medium text-enp-black leading-snug">
+                          <span className="font-mono text-enp-gray-medium mr-1.5">{crit.code}</span>
+                          {crit.libelle}
+                        </p>
+                        <span className="font-mono text-sm font-bold tabular-nums text-enp-blue-deep shrink-0">
+                          {crit.moyenne !== null ? crit.moyenne.toFixed(2) : '-'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-enp-gray-medium">
+                        <div className="flex items-center gap-1 font-mono tabular-nums">
+                          <span className="px-1 bg-red-50 text-enp-red-error" title="Note 1">{crit.distribution?.[0] ?? 0}</span>
+                          <span className="px-1 bg-amber-50 text-amber-700" title="Note 2">{crit.distribution?.[1] ?? 0}</span>
+                          <span className="px-1 bg-gray-100 text-gray-600" title="Note 3">{crit.distribution?.[2] ?? 0}</span>
+                          <span className="px-1 bg-blue-50 text-enp-blue-primary" title="Note 4">{crit.distribution?.[3] ?? 0}</span>
+                          <span className="px-1 bg-green-50 text-enp-green-valid font-semibold" title="Note 5">{crit.distribution?.[4] ?? 0}</span>
+                        </div>
+                        <span className="tabular-nums">Sans avis : {crit.sansAvis ?? 0}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* VUE BUREAU DES CRITÈRES */}
+                <div className="hidden sm:block overflow-x-auto border border-enp-border">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-enp-bg border-b border-enp-border text-enp-gray-dark font-semibold">
                       <tr>
                         <th className="p-3">Critère évalué</th>
-                        <th className="p-3 text-center w-24">Moyenne</th>
+                        <th className="p-3 text-right w-24">Moyenne</th>
                         <th className="p-3 text-center w-36">Distribution (1 à 5)</th>
-                        <th className="p-3 text-center w-24">Sans avis</th>
+                        <th className="p-3 text-right w-24">Sans avis</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-enp-border">
                       {section.criteres.map((crit) => (
                         <tr key={crit.critereId} className="hover:bg-enp-blue-ice/20">
                           <td className="p-3 font-medium text-enp-black">
-                            <span className="font-mono text-enp-gray-medium mr-2">[{crit.code}]</span>
+                            <span className="font-mono text-enp-gray-medium mr-2">{crit.code}</span>
                             {crit.libelle}
                           </td>
-                          <td className="p-3 text-center font-bold text-enp-blue-deep">
+                          <td className="p-3 text-right font-mono tabular-nums font-semibold text-enp-blue-deep">
                             {crit.moyenne !== null ? crit.moyenne.toFixed(2) : '-'}
                           </td>
                           <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-1 font-mono text-[11px]">
+                            <div className="flex items-center justify-center gap-1 font-mono tabular-nums text-[11px]">
                               <span className="px-1 bg-red-50 text-enp-red-error" title="Note 1">{crit.distribution?.[0] ?? 0}</span>
                               <span className="px-1 bg-amber-50 text-amber-700" title="Note 2">{crit.distribution?.[1] ?? 0}</span>
-                              <span className="px-1 bg-gray-50 text-gray-600" title="Note 3">{crit.distribution?.[2] ?? 0}</span>
+                              <span className="px-1 bg-gray-100 text-gray-600" title="Note 3">{crit.distribution?.[2] ?? 0}</span>
                               <span className="px-1 bg-blue-50 text-enp-blue-primary" title="Note 4">{crit.distribution?.[3] ?? 0}</span>
-                              <span className="px-1 bg-green-50 text-enp-green-valid font-bold" title="Note 5">{crit.distribution?.[4] ?? 0}</span>
+                              <span className="px-1 bg-green-50 text-enp-green-valid font-semibold" title="Note 5">{crit.distribution?.[4] ?? 0}</span>
                             </div>
                           </td>
-                          <td className="p-3 text-center text-enp-gray-medium">
+                          <td className="p-3 text-right font-mono tabular-nums text-enp-gray-medium">
                             {crit.sansAvis ?? 0}
                           </td>
                         </tr>
@@ -398,11 +416,11 @@ export function FicheResultatUE() {
           </div>
 
           {/* Commentaires modérés (Points forts et axes de progrès) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="bg-white border border-enp-border p-5 space-y-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-enp-green-valid flex items-center gap-1.5 border-b border-enp-border pb-2">
-                <CheckCircle2 className="w-4 h-4" />
-                Points forts de l'enseignement (commentaires modérés)
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+            <div className="bg-white border border-enp-border p-4 sm:p-5 space-y-3">
+              <h2 className="text-xs font-semibold text-enp-green-valid flex items-center gap-1.5 border-b border-enp-border pb-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Points forts (commentaires modérés)
               </h2>
               {resultat.pointsForts && resultat.pointsForts.length > 0 ? (
                 <ul className="space-y-2 text-xs sm:text-sm text-enp-black">
@@ -413,15 +431,15 @@ export function FicheResultatUE() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-enp-gray-medium italic">
-                  Aucun commentaire textuel formulé pour cette section.
+                <p className="text-xs text-enp-gray-medium">
+                  Aucun commentaire formulé pour cette section.
                 </p>
               )}
             </div>
 
-            <div className="bg-white border border-enp-border p-5 space-y-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-enp-blue-primary flex items-center gap-1.5 border-b border-enp-border pb-2">
-                <TrendingUp className="w-4 h-4" />
+            <div className="bg-white border border-enp-border p-4 sm:p-5 space-y-3">
+              <h2 className="text-xs font-semibold text-enp-blue-primary flex items-center gap-1.5 border-b border-enp-border pb-2">
+                <TrendingUp className="w-4 h-4 shrink-0" />
                 Axes de progrès suggérés (commentaires modérés)
               </h2>
               {resultat.pointsAAmeliorer && resultat.pointsAAmeliorer.length > 0 ? (
@@ -433,8 +451,8 @@ export function FicheResultatUE() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-enp-gray-medium italic">
-                  Aucune suggestion textuelle enregistrée.
+                <p className="text-xs text-enp-gray-medium">
+                  Aucune suggestion enregistrée.
                 </p>
               )}
             </div>

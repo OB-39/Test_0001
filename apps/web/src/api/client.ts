@@ -48,6 +48,11 @@ import type {
   EntreePresence,
   NoteEtudiant,
   PresencesEtudiant,
+  SessionQrPresence,
+  ResultatScanPresence,
+  JustificatifAbsence,
+  SoumissionJustificatif,
+  StatutJustificatif,
   ArchiveAnnuelle,
   Notification,
   PieceJointe,
@@ -640,6 +645,105 @@ export async function dossierMesNotes(): Promise<NoteEtudiant[]> {
 export async function dossierMesPresences(): Promise<PresencesEtudiant> {
   return requete<PresencesEtudiant>(
     "/dossier-academique/etudiant/mes-presences",
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Emargement par QR Code dynamique tournant                         */
+/* ------------------------------------------------------------------ */
+
+export async function presenceDemarrerSession(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  return requete<SessionQrPresence>("/presences/sessions/demarrer", {
+    method: "POST",
+    body: { seanceId },
+  });
+}
+
+export async function presenceObtenirJeton(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  return requete<SessionQrPresence>(
+    `/presences/sessions/${encodeURIComponent(seanceId)}/jeton`,
+  );
+}
+
+export async function presenceMettreEnPause(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  return requete<SessionQrPresence>(
+    `/presences/sessions/${encodeURIComponent(seanceId)}/pause`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export async function presenceReprendreSession(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  return requete<SessionQrPresence>(
+    `/presences/sessions/${encodeURIComponent(seanceId)}/reprendre`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export async function presenceCloturerSession(
+  seanceId: number,
+): Promise<SessionQrPresence> {
+  return requete<SessionQrPresence>(
+    `/presences/sessions/${encodeURIComponent(seanceId)}/cloturer`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export async function presenceScannerQr(corps: {
+  token: string;
+  deviceFingerprint: string;
+}): Promise<ResultatScanPresence> {
+  return requete<ResultatScanPresence>("/presences/scanner", {
+    method: "POST",
+    body: corps,
+  });
+}
+
+export async function dossierListerJustificatifs(
+  courseId?: number,
+): Promise<JustificatifAbsence[]> {
+  const query =
+    typeof courseId === "number"
+      ? `?courseId=${encodeURIComponent(courseId)}`
+      : "";
+  return requete<JustificatifAbsence[]>(`/presences/justificatifs${query}`);
+}
+
+export async function dossierSoumettreJustificatif(
+  corps: SoumissionJustificatif,
+): Promise<JustificatifAbsence> {
+  return requete<JustificatifAbsence>("/presences/justificatifs", {
+    method: "POST",
+    body: corps,
+  });
+}
+
+export async function dossierTraiterJustificatif(
+  justificatifId: number,
+  corps: {
+    statut: Exclude<StatutJustificatif, "en_attente">;
+    commentaireValidation?: string;
+  },
+): Promise<JustificatifAbsence> {
+  return requete<JustificatifAbsence>(
+    `/presences/justificatifs/${encodeURIComponent(justificatifId)}`,
+    {
+      method: "PATCH",
+      body: corps,
+    },
   );
 }
 

@@ -35,6 +35,8 @@ import {
   PlusCircle,
   Settings,
   Smartphone,
+  QrCode,
+  Info,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
@@ -43,6 +45,7 @@ import { ENPLogo } from './ENPLogo';
 import { api } from '@/api';
 import type { Notification, Role } from '@/api/types';
 import { PwaInstallBanner } from '@/pwa/PwaInstallBanner';
+import { PwaStatusBar } from '@/pwa/PwaStatusBar';
 import { usePwaInstall } from '@/pwa/usePwaInstall';
 
 const ICONES_MENU: Record<string, LucideIcon> = {
@@ -93,16 +96,16 @@ function getTabsMobile(role: Role): TabMobile[] {
     case 'etudiant':
       return [
         { chemin: '/', libelle: 'Accueil', icone: Home, exact: true },
+        { chemin: '/mes-presences', libelle: 'Présences', icone: QrCode },
         { chemin: '/evaluations', libelle: 'Évaluations', icone: ClipboardCheck },
-        { chemin: '/cahier-texte', libelle: 'Cahier', icone: BookOpen },
         { chemin: '/mes-notes', libelle: 'Notes', icone: GraduationCap },
       ];
     case 'delegue':
       return [
         { chemin: '/', libelle: 'Accueil', icone: Home, exact: true },
+        { chemin: '/mes-presences', libelle: 'Présences', icone: QrCode },
         { chemin: '/cahier-texte/nouvelle', libelle: 'Saisie', icone: PlusCircle },
         { chemin: '/cahier-texte', libelle: 'Cahier', icone: BookOpen },
-        { chemin: '/mes-notes', libelle: 'Notes', icone: GraduationCap },
       ];
     case 'enseignant':
       return [
@@ -128,10 +131,9 @@ function getTabsMobile(role: Role): TabMobile[] {
     case 'directeur_campus':
       return [
         { chemin: '/', libelle: 'Accueil', icone: Home, exact: true },
-        { chemin: '/direction/statistiques', libelle: 'Stats campus', icone: Globe2 },
+        { chemin: '/direction/statistiques', libelle: 'Stats', icone: Globe2 },
         { chemin: '/direction/controles', libelle: 'Contrôles', icone: Sliders },
         { chemin: '/resultats', libelle: 'Résultats', icone: BarChart3 },
-        { chemin: '/direction/commentaires', libelle: 'Commentaires', icone: MessageSquare },
       ];
     case 'directeur_general':
       return [
@@ -139,7 +141,6 @@ function getTabsMobile(role: Role): TabMobile[] {
         { chemin: '/direction/statistiques', libelle: 'Stats ENP', icone: Globe2 },
         { chemin: '/direction/controles', libelle: 'Contrôles', icone: Sliders },
         { chemin: '/resultats', libelle: 'Résultats', icone: BarChart3 },
-        { chemin: '/direction/commentaires', libelle: 'Commentaires', icone: MessageSquare },
       ];
     case 'admin':
       return [
@@ -159,7 +160,7 @@ function getTabsMobile(role: Role): TabMobile[] {
 export function AppLayout() {
   const { utilisateur, deconnecter, changerProfil } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
 
   const [menuMobileOuvert, setMenuMobileOuvert] = useState(false);
   const [sidebarDesktopOuverte, setSidebarDesktopOuverte] = useState(true);
@@ -167,7 +168,12 @@ export function AppLayout() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [menuProfilOuvert, setMenuProfilOuvert] = useState(false);
 
-  // Charger les notifications pour le badge compteur
+  // Remonter en haut de page a chaque changement de route
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [pathname]);
+
+  // Charger les notifications a la connexion puis toutes les 60 s (evite les appels redondants par route)
   useEffect(() => {
     let actif = true;
     async function chargerNotifs() {
@@ -180,10 +186,14 @@ export function AppLayout() {
       }
     }
     void chargerNotifs();
+    const timer = window.setInterval(() => {
+      void chargerNotifs();
+    }, 60_000);
     return () => {
       actif = false;
+      window.clearInterval(timer);
     };
-  }, [utilisateur, location.pathname]);
+  }, [utilisateur]);
 
   const nonLuesCount = useMemo(() => {
     return notifications.filter((n) => !n.luLe).length;
@@ -196,12 +206,12 @@ export function AppLayout() {
     return getTabsMobile(utilisateur.activeRole);
   }, [utilisateur]);
 
-  if (!utilisateur) return null;
+  const entrees = useMemo(() => {
+    if (!utilisateur) return [];
+    return entreesPourRoles([utilisateur.activeRole]);
+  }, [utilisateur]);
 
-  const entrees = entreesPourRoles([utilisateur.activeRole]);
-  const roleActifLibelle = LIBELLES_ROLES[utilisateur.activeRole] ?? utilisateur.activeRole;
-
-  // Regroupement par section métier
+  // Regroupement par section metier (appele avant le retour anticipe pour respecter les regles React Hooks)
   const sectionsGroupes = useMemo(() => {
     const map = new Map<string, EntreeMenu[]>();
     for (const entree of entrees) {
@@ -213,6 +223,10 @@ export function AppLayout() {
     }
     return Array.from(map.entries());
   }, [entrees]);
+
+  if (!utilisateur) return null;
+
+  const roleActifLibelle = LIBELLES_ROLES[utilisateur.activeRole] ?? utilisateur.activeRole;
 
   async function handleDeconnexion() {
     await deconnecter();
@@ -291,7 +305,16 @@ export function AppLayout() {
             className={({ isActive }) => classeLienNavigation(isActive)}
           >
             <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">Sécurité & MFA</span>
+            <span className="truncate">Sécurité &amp; MFA</span>
+          </NavLink>
+
+          <NavLink
+            to="/a-propos"
+            onClick={fermerMenuMobile}
+            className={({ isActive }) => classeLienNavigation(isActive)}
+          >
+            <Info className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">À propos</span>
           </NavLink>
 
           {peutInstaller && (
@@ -317,28 +340,27 @@ export function AppLayout() {
       {/* ======================================================== */}
       {/* 1. EN-TÊTE FIXE INSTITUTIONNEL OPAQUE (IMMOBILE)         */}
       {/* ======================================================== */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full h-16 sm:h-20 bg-[#0d3b66] text-white border-b border-[#00172E] shadow-elevated">
-        <div className="w-full px-3 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-2 sm:gap-4">
-            {/* Côté gauche : Bascule Hamburger PC + Logo officiel ENP agrandi */}
+      <header className="fixed top-0 left-0 right-0 z-50 w-full h-14 sm:h-16 bg-[#0d3b66] text-white border-b border-[#00172E]">
+        <div className="w-full px-3 sm:px-6 h-full flex items-center justify-between gap-2 sm:gap-4">
+            {/* Côté gauche : Bascule Hamburger PC + Logo officiel ENP */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              {/* Bouton Hamburger PC pour déplier / replier la bannière latérale */}
               <button
                 type="button"
                 onClick={() => setSidebarDesktopOuverte((prev) => !prev)}
-                className="hidden lg:flex p-2 -ml-2 text-white/90 hover:text-white hover:bg-white/10 border border-transparent focus:outline-none focus:border-white/40 transition-colors items-center justify-center cursor-pointer min-h-[44px] min-w-[44px]"
+                className="hidden lg:flex p-2 -ml-2 text-white/90 hover:text-white hover:bg-white/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/60 transition-colors items-center justify-center cursor-pointer min-h-[40px] min-w-[40px]"
                 aria-label={sidebarDesktopOuverte ? 'Masquer la barre latérale' : 'Afficher la barre latérale'}
                 aria-expanded={sidebarDesktopOuverte}
-                title={sidebarDesktopOuverte ? 'Replier le menu (plein écran)' : 'Déplier le menu'}
+                title={sidebarDesktopOuverte ? 'Replier le menu' : 'Déplier le menu'}
               >
-                <Menu className="w-6 h-6" />
+                <Menu className="w-5 h-5" />
               </button>
 
               <Link
                 to="/"
-                className="flex items-center gap-2 sm:gap-3 focus:outline-none focus:ring-1 focus:ring-white/40 py-1"
-                title="Retour à l’accueil"
+                className="flex items-center gap-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/40 py-1"
+                title="Accueil"
               >
-                <ENPLogo variant="light" size="md" showSubtitle={false} showArmoiries={false} />
+                <ENPLogo variant="light" size="sm" showSubtitle={false} showArmoiries={false} />
               </Link>
             </div>
 
@@ -409,34 +431,33 @@ export function AppLayout() {
               </div>
             )}
 
-            {/* Identité de l'agent / étudiant connecté */}
+            {/* Identité de l'utilisateur connecté (Desktop) */}
             <div className="hidden md:flex flex-col items-end text-right">
-              <span className="text-xs font-bold leading-tight tracking-tight text-white">
+              <span className="text-xs font-semibold leading-tight text-white">
                 {utilisateur.prenom} {utilisateur.nom}
               </span>
-              <span className="text-[11px] text-[#A6C4DE] leading-tight flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-enp-green-valid inline-block" />
+              <span className="text-[11px] text-[#A6C4DE] leading-tight">
                 {roleActifLibelle}
               </span>
             </div>
 
-            {/* Bouton Déconnexion institutionnel */}
+            {/* Déconnexion sur Desktop (sur mobile, accessible dans le tiroir Menu) */}
             <button
               type="button"
               onClick={handleDeconnexion}
-              className="inline-flex items-center gap-1.5 bg-enp-red-error hover:bg-enp-red-inst text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 border border-transparent shadow-subtle transition-colors min-h-[38px]"
+              className="hidden lg:inline-flex items-center gap-1.5 bg-white/10 hover:bg-enp-red-error text-white text-xs font-semibold px-3 py-1.5 border border-white/15 hover:border-transparent transition-colors min-h-[36px] whitespace-nowrap"
               aria-label="Se déconnecter de la plateforme"
-              title="Déconnexion sécurisée"
+              title="Déconnexion"
             >
               <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="hidden md:inline">Déconnexion</span>
+              <span>Déconnexion</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Spacer opaque pour compenser exactement la hauteur du header fixe */}
-      <div className="h-16 sm:h-20 shrink-0 w-full pointer-events-none" aria-hidden="true" />
+      {/* Spacer pour compenser exactement la hauteur du header fixe */}
+      <div className="h-14 sm:h-16 shrink-0 w-full pointer-events-none" aria-hidden="true" />
 
       {/* Message d'erreur de changement de profil si incident */}
       {erreurProfil && (
@@ -445,31 +466,26 @@ export function AppLayout() {
         </div>
       )}
 
+      {/* Indicateur hors-ligne et banniere de mise a jour PWA */}
+      <PwaStatusBar />
+
       {/* Bannière PWA d'installation sur smartphone / tablette */}
       <PwaInstallBanner />
 
       {/* ======================================================== */}
-      {/* 2. ZONE PRINCIPALE : SIDEBAR FLUSH GAUCHE + CONTENU       */}
+      {/* 2. ZONE PRINCIPALE : SIDEBAR + CONTENU                   */}
       {/* ======================================================== */}
       <div className="flex flex-1 w-full min-w-0 relative">
-        {/* Navigation latérale Desktop rétractable, flush à gauche sans espace vide */}
+        {/* Navigation latérale Desktop rétractable */}
         <aside
           aria-label="Menu institutionnel"
-          className={`hidden lg:flex flex-col shrink-0 border-r border-[#082642] bg-[#0d3b66] text-white sticky top-16 sm:top-20 h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] transition-all duration-200 overflow-y-auto scrollbar-thin ${
+          className={`hidden lg:flex flex-col shrink-0 border-r border-[#082642] bg-[#0d3b66] text-white sticky top-14 sm:top-16 h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] transition-all duration-200 overflow-y-auto scrollbar-thin ${
             sidebarDesktopOuverte
-              ? 'w-64 opacity-100'
+              ? 'w-60 opacity-100'
               : 'w-0 opacity-0 overflow-hidden border-r-0 pointer-events-none'
           }`}
         >
-          <div className="p-4 border-b border-white/10 bg-[#092b4a] shrink-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-enp-gold font-sans">
-              Portail Officiel ENP
-            </p>
-            <p className="text-xs text-slate-300 mt-0.5 font-sans">
-              Année 2026-2027 • Semestre actif
-            </p>
-          </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto pt-2">
             {navigationContenu}
           </div>
         </aside>
@@ -581,24 +597,67 @@ export function AppLayout() {
           </div>
         )}
 
-        {/* Zone de contenu principale de l'application */}
-        <main
-          id="contenu-principal"
-          tabIndex={-1}
-          className="flex-1 min-w-0 max-w-full p-3 sm:p-6 lg:p-8 pb-24 lg:pb-8 transition-all duration-200"
-        >
-          <div className="max-w-7xl mx-auto w-full">
-            <Outlet />
-          </div>
-        </main>
+        {/* Colonne droite : contenu principal + pied de page bureau */}
+        <div className="flex-1 min-w-0 max-w-full flex flex-col">
+          <main
+            id="contenu-principal"
+            tabIndex={-1}
+            className="flex-1 min-w-0 max-w-full px-3.5 py-4 sm:p-6 lg:p-7 pb-20 lg:pb-8 transition-all duration-200"
+          >
+            <div className="max-w-6xl mx-auto w-full">
+              <Outlet />
+            </div>
+          </main>
+
+          {/* ======================================================== */}
+          {/* 4. FOOTER INSTITUTIONNEL SOBRE (BUREAU UNIQUEMENT)       */}
+          {/* ======================================================== */}
+          <footer className="hidden lg:block bg-enp-blue-deep text-white border-t border-enp-blue-primary/40 mt-auto w-full overflow-hidden">
+            <div className="w-full px-6 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <img
+                    src="/armoiries-togo.svg"
+                    alt="Armoiries de la République Togolaise"
+                    className="h-8 w-auto object-contain shrink-0"
+                  />
+                  <div className="border-l border-white/15 pl-3 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">
+                      École Nationale Polytechnique de Lomé (ENP)
+                    </p>
+                    <p className="text-[11px] text-slate-300">
+                      République Togolaise · Travail, Liberté, Patrie
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-0.5 text-right">
+                  <p className="text-[11px] text-slate-300 leading-tight">
+                    © {new Date().getFullYear()} ENP Lomé ·{' '}
+                    <Link to="/a-propos" className="hover:text-white underline-offset-2 hover:underline">
+                      À propos
+                    </Link>
+                    {' · '}
+                    <Link to="/securite" className="hover:text-white underline-offset-2 hover:underline">
+                      Sécurité &amp; MFA
+                    </Link>
+                  </p>
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    Conception : Pr Adekunle Akim SALAMI, KOUDASSE Joy Amos &amp; OHOUNSOUN Bienvenu
+                  </p>
+                </div>
+              </div>
+            </div>
+          </footer>
+        </div>
       </div>
 
       {/* ======================================================== */}
-      {/* 3. DOCK / BARRE DE NAVIGATION MOBILE FIXE EN BAS         */}
+      {/* 3. BARRE DE NAVIGATION MOBILE FIXE EN BAS                */}
       {/* ======================================================== */}
       <nav
         aria-label="Navigation mobile principale"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-enp-border shadow-elevated flex items-stretch justify-around h-15 w-full max-w-full overflow-hidden"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-sm border-t border-enp-border flex items-stretch justify-around h-14 w-full max-w-full overflow-hidden"
       >
         {tabsMobile.map((tab) => (
           <NavLink
@@ -606,9 +665,9 @@ export function AppLayout() {
             to={tab.chemin}
             end={tab.exact}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-1.5 px-1 text-center transition-colors select-none min-h-[56px] ${
+              `flex-1 flex flex-col items-center justify-center py-1 px-1 text-center transition-colors select-none min-h-[56px] ${
                 isActive
-                  ? 'text-enp-blue-deep font-bold border-t-2 border-enp-blue-primary bg-enp-blue-light/50'
+                  ? 'text-enp-blue-deep font-bold border-t-2 border-enp-blue-primary bg-enp-blue-ice/60'
                   : 'text-enp-gray-medium hover:text-enp-black border-t-2 border-transparent'
               }`
             }
@@ -624,9 +683,9 @@ export function AppLayout() {
         <button
           type="button"
           onClick={() => setMenuMobileOuvert((v) => !v)}
-          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 text-center transition-colors select-none min-h-[56px] relative ${
+          className={`flex-1 flex flex-col items-center justify-center py-1 px-1 text-center transition-colors select-none min-h-[56px] relative ${
             menuMobileOuvert
-              ? 'text-enp-blue-deep font-bold border-t-2 border-enp-blue-primary bg-enp-blue-light/50'
+              ? 'text-enp-blue-deep font-bold border-t-2 border-enp-blue-primary bg-enp-blue-ice/60'
               : 'text-enp-gray-medium hover:text-enp-black border-t-2 border-transparent'
           }`}
           aria-label={menuMobileOuvert ? 'Fermer le menu' : 'Ouvrir le menu complet'}
@@ -647,55 +706,6 @@ export function AppLayout() {
           </span>
         </button>
       </nav>
-
-      {/* ======================================================== */}
-      {/* 4. FOOTER INSTITUTIONNEL */}
-      {/* ======================================================== */}
-      <footer className="bg-enp-blue-deep text-white border-t-2 border-enp-blue-primary mt-auto w-full overflow-hidden">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Côté gauche : Armoiries officielles de la République Togolaise & Identité ENP */}
-            <div className="flex items-center gap-3 w-full sm:w-auto min-w-0">
-              <img
-                src="/armoiries-togo.svg"
-                alt="Armoiries de la République Togolaise"
-                className="h-10 w-auto object-contain shrink-0"
-              />
-              <div className="border-l border-white/15 pl-3 min-w-0">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className="font-bold text-[11px] tracking-wider text-enp-gold uppercase">
-                    RÉPUBLIQUE TOGOLAISE
-                  </span>
-                  <span className="text-white/30 text-xs">•</span>
-                  <span className="text-[10px] sm:text-[11px] text-slate-300 italic">Travail, Liberté, Patrie</span>
-                </div>
-                <p className="text-xs font-semibold text-white tracking-wide mt-0.5 truncate">
-                  École Nationale Polytechnique (ENP)
-                </p>
-              </div>
-            </div>
-
-            {/* Côté droit : Mentions officielles & Droits d'auteur */}
-            <div className="flex flex-col items-center md:items-end gap-1 text-xs text-slate-300 w-full md:w-auto text-center md:text-right">
-              <div className="flex items-center gap-3">
-                <Link to="/securite" className="text-slate-300 hover:text-white transition-colors underline-offset-4 hover:underline">
-                  Sécurité &amp; MFA
-                </Link>
-                <span className="text-white/20">•</span>
-                <span className="text-slate-300">
-                  Système d'Évaluation &amp; Suivi Académique
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-300 leading-tight">
-                © {new Date().getFullYear()} École Nationale Polytechnique de Lomé (ENP) • Tous droits réservés
-              </p>
-              <p className="text-[10px] text-slate-400 tracking-wide">
-                Conception : Pr Adekunle Akim SALAMI, KOUDASSE Joy Amos &amp; OHOUNSOUN Bienvenu
-              </p>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

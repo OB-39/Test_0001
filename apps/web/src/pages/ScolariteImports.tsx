@@ -3,14 +3,13 @@ import {
   Upload,
   Download,
   FileText,
-  CheckCircle2,
-  AlertCircle,
   X,
   Users,
   BookOpen,
 } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import { useConfirmation } from '@/components/useConfirmation';
+import { PageHeader, Alert, Button } from '@/components/ui';
 import type {
   ResultatImportUtilisateurs,
   ResultatImport,
@@ -247,41 +246,40 @@ export function ScolariteImports() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* En-tête simple et direct */}
-      <div className="border-b border-enp-border pb-4">
-        <h1 className="text-xl font-bold text-enp-blue-deep font-sans">
-          Importation de fichiers
-        </h1>
-        <p className="text-xs text-enp-gray-medium mt-1">
-          Chargez vos données via CSV ou les classeurs XLSX fournis par l’établissement.
-        </p>
-      </div>
+    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-5 animate-fade-in pb-6">
+      <PageHeader
+        title="Importation de fichiers"
+        description="Chargez des comptes ou des données académiques via CSV ou classeur XLSX."
+        breadcrumbs={[
+          { label: 'Accueil', href: '/' },
+          { label: 'Imports' },
+        ]}
+      />
 
-      {/* Carte principale épurée */}
-      <div className="bg-white border border-enp-border p-6 shadow-subtle space-y-6">
+      {/* Carte principale */}
+      <div className="bg-white border border-enp-border p-4 sm:p-6 space-y-5">
         {/* Étape 1 : Choix de la catégorie */}
         <div className="space-y-2">
-          <label className="block text-xs font-bold text-enp-blue-deep uppercase tracking-wider">
-            1. Que souhaitez-vous importer ?
-          </label>
-          <div className="grid grid-cols-2 gap-3">
+          <p className="text-xs font-semibold text-enp-blue-deep">
+            1. Type de données
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <button
               type="button"
               onClick={() => {
                 setCategorie('comptes');
                 reinitialiser();
               }}
-              className={`p-3 text-left border flex items-center gap-3 transition-colors ${
+              className={`p-3.5 text-left border flex items-center gap-3 transition-colors min-h-[56px] ${
                 categorie === 'comptes'
-                  ? 'border-enp-blue-primary bg-enp-blue-ice text-enp-blue-deep font-bold'
+                  ? 'border-enp-blue-primary bg-enp-blue-ice/60 text-enp-blue-deep font-semibold'
                   : 'border-enp-border bg-white text-enp-black hover:bg-slate-50'
               }`}
             >
               <Users className="w-5 h-5 text-enp-blue-primary shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold">Comptes utilisateurs</p>
-                <p className="text-[11px] text-enp-gray-medium font-normal">Étudiants, profs, etc.</p>
+                <p className="text-[11px] text-enp-gray-medium font-normal">Étudiants, enseignants, délégués</p>
               </div>
             </button>
 
@@ -291,16 +289,16 @@ export function ScolariteImports() {
                 setCategorie('academique');
                 reinitialiser();
               }}
-              className={`p-3 text-left border flex items-center gap-3 transition-colors ${
+              className={`p-3.5 text-left border flex items-center gap-3 transition-colors min-h-[56px] ${
                 categorie === 'academique'
-                  ? 'border-enp-blue-primary bg-enp-blue-ice text-enp-blue-deep font-bold'
+                  ? 'border-enp-blue-primary bg-enp-blue-ice/60 text-enp-blue-deep font-semibold'
                   : 'border-enp-border bg-white text-enp-black hover:bg-slate-50'
               }`}
             >
               <BookOpen className="w-5 h-5 text-enp-blue-primary shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold">Données académiques</p>
-                <p className="text-[11px] text-enp-gray-medium font-normal">UE, cours, inscriptions...</p>
+                <p className="text-[11px] text-enp-gray-medium font-normal">UE, offres, inscriptions, présences</p>
               </div>
             </button>
           </div>
@@ -308,9 +306,9 @@ export function ScolariteImports() {
 
         {/* Sous-choix si données académiques */}
         {categorie === 'academique' && (
-          <div className="space-y-1.5 p-3.5 bg-enp-blue-ice/50 border border-enp-border animate-fade-in">
-            <label htmlFor="select-type" className="block text-xs font-bold text-enp-blue-deep">
-              Type d'élément académique :
+          <div className="space-y-1.5 p-3.5 bg-enp-bg border border-enp-border animate-fade-in">
+            <label htmlFor="select-type" className="block text-xs font-semibold text-enp-blue-deep">
+              Élément académique
             </label>
             <select
               id="select-type"
@@ -358,18 +356,20 @@ export function ScolariteImports() {
 
         {/* Étape 2 : Zone de dépôt du fichier */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-enp-blue-deep uppercase tracking-wider">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-enp-blue-deep">
               2. Fichier {categorie === 'comptes' || !importXlsx ? 'CSV' : 'XLSX'}
-            </label>
-            {!importXlsx && <button
-              type="button"
-              onClick={telechargerModele}
-              className="text-xs text-enp-blue-primary hover:underline font-medium inline-flex items-center gap-1"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Télécharger le modèle CSV
-            </button>}
+            </span>
+            {!importXlsx && (
+              <button
+                type="button"
+                onClick={telechargerModele}
+                className="text-xs text-enp-blue-primary hover:underline font-medium inline-flex items-center gap-1 py-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Modèle CSV
+              </button>
+            )}
           </div>
 
           {fichier ? (
@@ -425,25 +425,23 @@ export function ScolariteImports() {
 
         {/* Message d'erreur global */}
         {erreur && (
-          <div className="p-3 bg-enp-red-light border-l-4 border-enp-red-error text-xs text-enp-red-error flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <p className="font-medium leading-relaxed">{erreur}</p>
-          </div>
+          <Alert variant="danger" title="Erreur" onClose={() => setErreur(null)}>
+            {erreur}
+          </Alert>
         )}
 
         {/* Message de succès */}
         {succesMessage && (
-          <div className="p-3 bg-enp-green-light border-l-4 border-enp-green-valid text-xs text-enp-green-valid flex items-start gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            <p className="font-bold leading-relaxed">{succesMessage}</p>
-          </div>
+          <Alert variant="success" title="Importation" onClose={() => setSuccesMessage(null)}>
+            {succesMessage}
+          </Alert>
         )}
 
         {/* Tableau épuré des lignes en erreur si présent */}
         {erreursLignes.length > 0 && (
           <div className="space-y-1.5 pt-2 border-t border-enp-border">
-            <p className="text-xs font-bold text-enp-red-error">
-              Lignes rejetées ({erreursLignes.length}) :
+            <p className="text-xs font-semibold text-enp-red-error">
+              Lignes rejetées ({erreursLignes.length})
             </p>
             <div className="border border-enp-border text-xs max-h-40 overflow-y-auto">
               <table className="w-full">
@@ -456,10 +454,10 @@ export function ScolariteImports() {
                 <tbody className="divide-y divide-enp-border">
                   {erreursLignes.map((err, i) => (
                     <tr key={i}>
-                      <td className="px-2.5 py-1 font-mono font-bold text-enp-red-error">
+                      <td className="px-2.5 py-1.5 font-mono tabular-nums font-semibold text-enp-red-error">
                         #{err.ligne}
                       </td>
-                      <td className="px-2.5 py-1 text-enp-black">{err.message}</td>
+                      <td className="px-2.5 py-1.5 text-enp-black">{err.message}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -469,9 +467,9 @@ export function ScolariteImports() {
         )}
 
         {rapport && (
-          <section className="space-y-2 border-t border-enp-border pt-3" aria-live="polite">
-            <h2 className="text-sm font-bold text-enp-blue-deep">Rapport de vérification</h2>
-            <p className="text-xs text-enp-gray-medium">
+          <section className="space-y-2.5 border-t border-enp-border pt-3" aria-live="polite">
+            <h2 className="text-sm font-semibold text-enp-blue-deep">Rapport de vérification</h2>
+            <p className="text-xs text-enp-gray-medium tabular-nums">
               {rapport.lignesValides} ligne(s) valide(s) sur {rapport.lignesTotal}.
             </p>
             {rapport.avertissements?.map((avertissement, index) => (
@@ -479,40 +477,38 @@ export function ScolariteImports() {
                 Ligne {avertissement.ligne} : {avertissement.message}
               </p>
             ))}
-            <button
+            <Button
               type="button"
+              variant="success"
+              className="w-full min-h-[44px]"
               disabled={enCours || rapport.lignesValides === 0}
+              isLoading={enCours}
               onClick={() => void appliquerImport()}
-              className="w-full py-2.5 px-4 bg-enp-green-valid text-white text-xs font-bold disabled:opacity-50"
             >
               Confirmer et appliquer les lignes valides
-            </button>
+            </Button>
           </section>
         )}
 
         {resultatAcademique && (
-          <p className="text-xs text-enp-green-valid" role="status">
+          <p className="text-xs text-enp-green-valid tabular-nums" role="status">
             Import appliqué : {resultatAcademique.crees} création(s), {resultatAcademique.misAJour} mise(s) à jour.
           </p>
         )}
 
         {/* Bouton d'action principal */}
-        <div className="pt-2">
-          <button
+        <div className="pt-1">
+          <Button
             type="button"
+            variant="primary"
+            className="w-full min-h-[44px]"
             disabled={!fichier || enCours || (categorie === 'academique' && !!rapport)}
+            isLoading={enCours}
+            leftIcon={<Upload className="w-4 h-4" />}
             onClick={() => void lancerImport()}
-            className="w-full py-2.5 px-4 bg-enp-blue-primary hover:bg-enp-blue-dark text-white text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {enCours ? (
-              <span>Importation en cours…</span>
-            ) : (
-              <>
-                <Upload className="w-4 h-4" />
-                <span>{categorie === 'academique' ? 'Vérifier le fichier' : 'Importer le fichier'}</span>
-              </>
-            )}
-          </button>
+            {categorie === 'academique' ? 'Vérifier le fichier' : 'Importer le fichier'}
+          </Button>
         </div>
       </div>
     </div>
