@@ -1,0 +1,732 @@
+o [ ~/enp-eval ]$ az containerapp secret set -g $RG -n $APP --secrets "qr-presence-secret=keyvaultref:$KV/qr-presence-secret,identityref:$ID"
+- Running ..Failed to provision revision for container app 'enp-evaluation-test'. Error details: The following field(s) are either invalid or missing. Field 'configuration.secrets' is invalid with details: 'Invalid value: "qr-presence-secret": Unable to get value using Managed identity /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app for secret qr-presence-secret. Error: unable to fetch secret 'qr-presence-secret' using Managed identity '/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app'';..
+o [ ~/enp-eval ]$ az containerapp show -g $RG -n $APP --query "properties.configuration.secrets[0:2].{name:name,kv:keyVaultUrl,id:identity}" -o json
+[
+  {
+    "id": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "kv": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url",
+    "name": "database-url"
+  },
+  {
+    "id": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "kv": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url-ballot",
+    "name": "database-url-ballot"
+  }
+]
+o [ ~/enp-eval ]$ az keyvault show -n kvenpeval2026f4d554 --query "{rbac:properties.enableRbacAuthorization,net:properties.networkAcls.defaultAction}" -o json
+{
+  "net": null,
+  "rbac": true
+}
+o [ ~/enp-eval ]$ PID=$(az identity show -g $RG -n id-enp-eval-app --query principalId -o tsv)
+az role assignment list --assignee $PID --all --query "[].{role:roleDefinitionName,scope:scope}" -o table
+Role                    Scope
+----------------------  ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+AcrPull                 /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.ContainerRegistry/registries/enpevaltest2026f4d55454
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/database-url
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/database-url-ballot
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/database-url-results
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/jwt-access-secret
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/jwt-refresh-secret
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/ballot-token-secret
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/mfa-challenge-secret
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/mfa-encryption-key
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/smtp-host
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/smtp-port
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/smtp-secure
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/smtp-user
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/smtp-password
+Key Vault Secrets User  /subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.KeyVault/vaults/kvenpeval2026f4d554/secrets/smtp-from
+o [ ~/enp-eval ]$ KVID=$(az keyvault show -n kvenpeval2026f4d554 --query id -o tsv)
+az role assignment create --assignee-object-id $PID --assignee-principal-type ServicePrincipal --role "Key Vault Secrets User" --scope "$KVID/secrets/qr-presence-secret" -o none
+az role assignment create --assignee-object-id $PID --assignee-principal-type ServicePrincipal --role "Key Vault Secrets User" --scope "$KVID/secrets/audit-hmac-secret" -o none
+o [ ~/enp-eval ]$ sleep 15
+o [ ~/enp-eval ]$ az containerapp secret set -g $RG -n $APP --secrets "qr-presence-secret=keyvaultref:$KV/qr-presence-secret,identityref:$ID"
+Containerapp 'enp-evaluation-test' must be restarted in order for secret changes to take effect.
+[
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url-ballot",
+    "name": "database-url-ballot"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-secure",
+    "name": "smtp-secure"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-user",
+    "name": "smtp-user"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url",
+    "name": "database-url"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/jwt-access-secret",
+    "name": "jwt-access-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/mfa-challenge-secret",
+    "name": "mfa-challenge-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/mfa-encryption-key",
+    "name": "mfa-encryption-key"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-host",
+    "name": "smtp-host"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-port",
+    "name": "smtp-port"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url-results",
+    "name": "database-url-results"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-from",
+    "name": "smtp-from"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/jwt-refresh-secret",
+    "name": "jwt-refresh-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-password",
+    "name": "smtp-password"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/ballot-token-secret",
+    "name": "ballot-token-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/qr-presence-secret",
+    "name": "qr-presence-secret"
+  }
+]
+o [ ~/enp-eval ]$ az containerapp secret set -g $RG -n $APP --secrets "audit-hmac-secret=keyvaultref:$KV/audit-hmac-secret,identityref:$ID"
+Containerapp 'enp-evaluation-test' must be restarted in order for secret changes to take effect.
+[
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/jwt-access-secret",
+    "name": "jwt-access-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-port",
+    "name": "smtp-port"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-secure",
+    "name": "smtp-secure"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-user",
+    "name": "smtp-user"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/jwt-refresh-secret",
+    "name": "jwt-refresh-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/qr-presence-secret",
+    "name": "qr-presence-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-host",
+    "name": "smtp-host"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-password",
+    "name": "smtp-password"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/mfa-challenge-secret",
+    "name": "mfa-challenge-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/mfa-encryption-key",
+    "name": "mfa-encryption-key"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-from",
+    "name": "smtp-from"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url-results",
+    "name": "database-url-results"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/ballot-token-secret",
+    "name": "ballot-token-secret"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url",
+    "name": "database-url"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url-ballot",
+    "name": "database-url-ballot"
+  },
+  {
+    "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+    "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/audit-hmac-secret",
+    "name": "audit-hmac-secret"
+  }
+]
+o [ ~/enp-eval ]$ az containerapp update -g $RG -n $APP --container-name api --set-env-vars "QR_PRESENCE_SECRET=secretref:qr-presence-secret" "AUDIT_HMAC_SECRET=secretref:audit-hmac-secret"
+{
+  "id": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.App/containerapps/enp-evaluation-test",
+  "identity": {
+    "type": "UserAssigned",
+    "userAssignedIdentities": {
+      "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app": {
+        "clientId": "526c169b-939d-4c9c-8fe0-f019fe468223",
+        "principalId": "ab9de4ca-1a89-4f27-a0c0-e6c12d2a359f"
+      }
+    }
+  },
+  "location": "Italy North",
+  "name": "enp-evaluation-test",
+  "properties": {
+    "configuration": {
+      "activeRevisionsMode": "Single",
+      "dapr": null,
+      "identitySettings": [],
+      "ingress": {
+        "additionalPortMappings": null,
+        "allowInsecure": false,
+        "clientCertificateMode": null,
+        "corsPolicy": null,
+        "customDomains": null,
+        "exposedPort": 0,
+        "external": true,
+        "fqdn": "enp-evaluation-test.bluebush-d73ab564.italynorth.azurecontainerapps.io",
+        "ipSecurityRestrictions": null,
+        "stickySessions": null,
+        "targetPort": 8080,
+        "traffic": [
+          {
+            "latestRevision": true,
+            "weight": 100
+          }
+        ],
+        "transport": "Auto"
+      },
+      "maxInactiveRevisions": 100,
+      "registries": [
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "passwordSecretRef": "",
+          "server": "enpevaltest2026f4d55454.azurecr.io",
+          "username": ""
+        }
+      ],
+      "runtime": null,
+      "secrets": [
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/jwt-access-secret",
+          "name": "jwt-access-secret"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-port",
+          "name": "smtp-port"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-secure",
+          "name": "smtp-secure"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-user",
+          "name": "smtp-user"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/jwt-refresh-secret",
+          "name": "jwt-refresh-secret"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/qr-presence-secret",
+          "name": "qr-presence-secret"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-host",
+          "name": "smtp-host"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-password",
+          "name": "smtp-password"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/mfa-challenge-secret",
+          "name": "mfa-challenge-secret"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/mfa-encryption-key",
+          "name": "mfa-encryption-key"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/smtp-from",
+          "name": "smtp-from"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url-results",
+          "name": "database-url-results"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/ballot-token-secret",
+          "name": "ballot-token-secret"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url",
+          "name": "database-url"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/database-url-ballot",
+          "name": "database-url-ballot"
+        },
+        {
+          "identity": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourcegroups/rg-enp-evaluation-test-sa/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-enp-eval-app",
+          "keyVaultUrl": "https://kvenpeval2026f4d554.vault.azure.net/secrets/audit-hmac-secret",
+          "name": "audit-hmac-secret"
+        }
+      ],
+      "service": null
+    },
+    "customDomainVerificationId": "F6C80AF42CE22C412637E54CE9F1BC1E1EFA05833FB9694EE15EAD25D576F434",
+    "delegatedIdentities": [],
+    "environmentId": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.App/managedEnvironments/cae-enp-eval-itn",
+    "eventStreamEndpoint": "https://italynorth.azurecontainerapps.dev/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/containerApps/enp-evaluation-test/eventstream",
+    "latestReadyRevisionName": "enp-evaluation-test--0000021",
+    "latestRevisionFqdn": "enp-evaluation-test--0000022.bluebush-d73ab564.italynorth.azurecontainerapps.io",
+    "latestRevisionName": "enp-evaluation-test--0000022",
+    "managedEnvironmentId": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.App/managedEnvironments/cae-enp-eval-itn",
+    "outboundIpAddresses": [
+      "4.232.216.223",
+      "4.232.216.232",
+      "4.232.216.240",
+      "4.232.216.233",
+      "172.213.194.172",
+      "172.213.194.150",
+      "172.213.194.184",
+      "172.213.194.148",
+      "172.213.194.157",
+      "172.213.194.146",
+      "4.232.20.160",
+      "172.213.65.251",
+      "172.213.65.198",
+      "172.213.72.62",
+      "172.213.65.206",
+      "9.235.124.121",
+      "9.235.124.108",
+      "172.213.184.129",
+      "172.213.66.13",
+      "9.235.144.186",
+      "9.235.124.102",
+      "172.213.72.54",
+      "4.232.226.62",
+      "172.213.66.7",
+      "172.213.66.5",
+      "9.235.124.154",
+      "9.235.124.106",
+      "172.213.65.187",
+      "9.235.124.130",
+      "9.235.124.162",
+      "172.213.184.218",
+      "172.213.72.31",
+      "172.213.72.53",
+      "72.146.55.252",
+      "172.213.65.224",
+      "72.146.66.242",
+      "172.213.66.2",
+      "9.235.144.93",
+      "72.146.55.204",
+      "172.213.72.67",
+      "9.235.139.20",
+      "9.235.144.61",
+      "4.232.225.244",
+      "72.146.66.243",
+      "172.213.72.46",
+      "172.213.72.38",
+      "4.232.20.161",
+      "9.235.138.166",
+      "172.213.66.10",
+      "72.146.55.254",
+      "4.232.225.240",
+      "172.213.65.197",
+      "4.232.225.245",
+      "4.232.225.241",
+      "4.232.225.243",
+      "172.213.65.233",
+      "172.213.72.41",
+      "9.235.124.156",
+      "172.213.65.183",
+      "172.213.184.219",
+      "172.213.65.236",
+      "4.232.225.247",
+      "172.213.72.56",
+      "172.213.65.254",
+      "4.232.20.217",
+      "172.213.184.128",
+      "4.232.20.216",
+      "4.232.225.246",
+      "9.235.124.126",
+      "72.146.48.12",
+      "9.235.138.167",
+      "172.213.65.194",
+      "72.146.48.13",
+      "9.235.144.187",
+      "4.232.226.63",
+      "9.235.124.230",
+      "9.235.124.189",
+      "9.235.144.92",
+      "9.235.124.178",
+      "4.232.225.242",
+      "4.232.189.182",
+      "172.213.216.24",
+      "72.146.29.76",
+      "72.146.14.133",
+      "72.146.14.138",
+      "172.213.210.149",
+      "4.232.189.91",
+      "4.232.189.225",
+      "172.213.216.88",
+      "172.213.226.119",
+      "172.213.198.14",
+      "172.213.193.89",
+      "9.235.147.98",
+      "172.213.65.13",
+      "9.235.138.200",
+      "9.235.148.162",
+      "172.213.193.88",
+      "9.235.147.109",
+      "172.213.65.23",
+      "72.146.129.13",
+      "4.232.216.124",
+      "4.232.216.181",
+      "4.232.216.239",
+      "4.232.216.96",
+      "172.213.196.51",
+      "172.213.196.82",
+      "172.213.196.79",
+      "172.213.196.80",
+      "172.213.196.77",
+      "172.213.196.65",
+      "9.235.139.113",
+      "9.235.150.115",
+      "72.146.55.143",
+      "9.235.138.9",
+      "172.213.65.133",
+      "9.235.12.203",
+      "72.146.55.141",
+      "9.235.96.249",
+      "9.235.138.230",
+      "9.235.139.67",
+      "172.213.65.117",
+      "9.235.97.224",
+      "9.235.150.81",
+      "72.146.55.175",
+      "9.235.150.38",
+      "9.235.139.45",
+      "9.235.121.148",
+      "9.235.149.168",
+      "72.146.55.115",
+      "4.232.19.230",
+      "9.235.138.82",
+      "9.235.97.117",
+      "9.235.97.0",
+      "9.235.139.29",
+      "9.235.150.159",
+      "9.235.138.8",
+      "9.235.97.151",
+      "9.235.138.236",
+      "9.235.150.149",
+      "9.235.137.90",
+      "9.235.139.96",
+      "9.235.150.103",
+      "72.146.55.181",
+      "9.235.136.131",
+      "72.146.55.103",
+      "172.213.65.114",
+      "172.213.65.88",
+      "9.235.122.8",
+      "9.235.97.255",
+      "9.235.148.254",
+      "9.235.138.20",
+      "172.213.65.119",
+      "9.235.139.74",
+      "9.235.121.37",
+      "72.146.55.178",
+      "172.213.65.122",
+      "9.235.136.130",
+      "9.235.150.132",
+      "172.213.65.29",
+      "9.235.138.21",
+      "172.213.65.45",
+      "9.235.150.86",
+      "9.235.139.6",
+      "72.146.55.182",
+      "9.235.150.134",
+      "9.235.139.130",
+      "172.213.65.55",
+      "9.235.150.136",
+      "9.235.121.224",
+      "9.235.149.204",
+      "9.235.97.225",
+      "72.146.55.169",
+      "9.235.149.229",
+      "9.235.138.83",
+      "72.146.55.111",
+      "172.213.65.91",
+      "9.235.137.91",
+      "72.146.55.42",
+      "9.235.150.195",
+      "172.213.65.73",
+      "72.146.135.110"
+    ],
+    "provisioningState": "Succeeded",
+    "runningStatus": "Running",
+    "template": {
+      "containers": [
+        {
+          "image": "enpevaltest2026f4d55454.azurecr.io/enp-web:1708eadb",
+          "name": "web",
+          "probes": [
+            {
+              "failureThreshold": 6,
+              "httpGet": {
+                "path": "/",
+                "port": 8080
+              },
+              "initialDelaySeconds": 2,
+              "periodSeconds": 10,
+              "timeoutSeconds": 5,
+              "type": "Readiness"
+            }
+          ],
+          "resources": {
+            "cpu": 0.25,
+            "ephemeralStorage": "1Gi",
+            "memory": "0.5Gi"
+          }
+        },
+        {
+          "env": [
+            {
+              "name": "NODE_ENV"
+            },
+            {
+              "name": "PORT"
+            },
+            {
+              "name": "COOKIE_SECURE"
+            },
+            {
+              "name": "APP_URL"
+            },
+            {
+              "name": "ALLOWED_ORIGINS"
+            },
+            {
+              "name": "SESSION_TTL_MINUTES"
+            },
+            {
+              "name": "ACCESS_TOKEN_TTL_MINUTES"
+            },
+            {
+              "name": "DATABASE_URL",
+              "secretRef": "database-url",
+              "value": ""
+            },
+            {
+              "name": "DATABASE_URL_BALLOT",
+              "secretRef": "database-url-ballot",
+              "value": ""
+            },
+            {
+              "name": "DATABASE_URL_RESULTS",
+              "secretRef": "database-url-results",
+              "value": ""
+            },
+            {
+              "name": "JWT_ACCESS_SECRET",
+              "secretRef": "jwt-access-secret",
+              "value": ""
+            },
+            {
+              "name": "JWT_REFRESH_SECRET",
+              "secretRef": "jwt-refresh-secret",
+              "value": ""
+            },
+            {
+              "name": "BALLOT_TOKEN_SECRET",
+              "secretRef": "ballot-token-secret",
+              "value": ""
+            },
+            {
+              "name": "MFA_CHALLENGE_SECRET",
+              "secretRef": "mfa-challenge-secret",
+              "value": ""
+            },
+            {
+              "name": "MFA_ENCRYPTION_KEY",
+              "secretRef": "mfa-encryption-key",
+              "value": ""
+            },
+            {
+              "name": "SMTP_HOST",
+              "secretRef": "smtp-host",
+              "value": ""
+            },
+            {
+              "name": "SMTP_PORT",
+              "secretRef": "smtp-port",
+              "value": ""
+            },
+            {
+              "name": "SMTP_SECURE",
+              "secretRef": "smtp-secure",
+              "value": ""
+            },
+            {
+              "name": "SMTP_USER",
+              "secretRef": "smtp-user",
+              "value": ""
+            },
+            {
+              "name": "SMTP_PASSWORD",
+              "secretRef": "smtp-password",
+              "value": ""
+            },
+            {
+              "name": "SMTP_FROM",
+              "secretRef": "smtp-from",
+              "value": ""
+            },
+            {
+              "name": "QR_PRESENCE_SECRET",
+              "secretRef": "qr-presence-secret"
+            },
+            {
+              "name": "AUDIT_HMAC_SECRET",
+              "secretRef": "audit-hmac-secret"
+            }
+          ],
+          "image": "enpevaltest2026f4d55454.azurecr.io/enp-api:1708eadb",
+          "name": "api",
+          "probes": [
+            {
+              "failureThreshold": 6,
+              "httpGet": {
+                "path": "/api/v1/health",
+                "port": 3000
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 10,
+              "timeoutSeconds": 5,
+              "type": "Readiness"
+            }
+          ],
+          "resources": {
+            "cpu": 0.5,
+            "ephemeralStorage": "2Gi",
+            "memory": "1Gi"
+          }
+        }
+      ],
+      "initContainers": null,
+      "revisionSuffix": "",
+      "scale": {
+        "cooldownPeriod": 300,
+        "maxReplicas": 2,
+        "minReplicas": 1,
+        "pollingInterval": 30,
+        "rules": null
+      },
+      "serviceBinds": null,
+      "terminationGracePeriodSeconds": null,
+      "volumes": null
+    },
+    "workloadProfileName": "Consumption"
+  },
+  "resourceGroup": "rg-enp-evaluation-test-sa",
+  "systemData": {
+    "createdAt": "2026-11-02T18:56:46.9979354",
+    "createdBy": "39lightob@gmail.com",
+    "createdByType": "User",
+    "lastModifiedAt": "2026-11-23T11:13:31.7321196",
+    "lastModifiedBy": "39lightob@gmail.com",
+    "lastModifiedByType": "User"
+  },
+  "type": "Microsoft.App/containerApps"
+}
+o [ ~/enp-eval ]$ az acr build -r $ACR -t enp-qr-presence-migration:$TAG -f infra/sql/Dockerfile.qr-presence-026 .
+Packing source code into tar to upload...
+Excluding '.gitignore' based on default ignore rules
+Excluding 'apps/web/.gitignore' based on default ignore rules
+Excluding '.git' based on default ignore rules
+Uploading archived source code from '/tmp/build_archive_2299c518764f49b1aa98be9cf2586942.tar.gz'...
+Sending context (1.225 MiB) to registry: enpevaltest2026f4d55454...
+(TasksOperationsNotAllowed) ACR Tasks requests for the registry enpevaltest2026f4d55454 and f4d55454-8b32-47d4-a431-cd1066b2f879 are not permitted. Please file an Azure support request at http://aka.ms/azuresupport for assistance.
+Code: TasksOperationsNotAllowed
+Message: ACR Tasks requests for the registry enpevaltest2026f4d55454 and f4d55454-8b32-47d4-a431-cd1066b2f879 are not permitted. Please file an Azure support request at http://aka.ms/azuresupport for assistance.
+Target: request
+o [ ~/enp-eval ]$ az containerapp job update -g $RG -n db-migration-job --image $ACR.azurecr.io/enp-qr-presence-migration:$TAG
+(InvalidParameterValueInContainerTemplate) The following field(s) are either invalid or missing. Field 'template.containers.db-migration-job.image' is invalid with details: 'Invalid value: "enpevaltest2026f4d55454.azurecr.io/enp-qr-presence-migration:5814ac36": GET https:: MANIFEST_UNKNOWN: manifest tagged by "5814ac36" is not found; map[Tag:5814ac36]';.
+o [ ~/enp-eval ]$ az containerapp job start -g $RG -n db-migration-job
+{
+  "id": "/subscriptions/f4d55454-8b32-47d4-a431-cd1066b2f879/resourceGroups/rg-enp-evaluation-test-sa/providers/Microsoft.App/jobs/db-migration-job/executions/db-migration-job-438zvk4",
+  "name": "db-migration-job-438zvk4",
+  "resourceGroup": "rg-enp-evaluation-test-sa"
+}
+o [ ~/enp-eval ]$ az containerapp job execution list -g $RG -n db-migration-job --query "[0:3].{name:name,status:properties.status}" -o table
+Name                      Status
+------------------------  ---------
+db-migration-job-438zvk4  Running
+db-migration-job-krdi64h  Succeeded
+db-migration-job-awxgjs5  Succeeded
+o [ ~/enp-eval ]$ 

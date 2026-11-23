@@ -1,0 +1,122 @@
+name: Build & Push Azure ACR
+
+on:
+  workflow_dispatch:
+    inputs:
+      acr_login_server:
+        description: "Serveur Azure Container Registry (*.azurecr.io)"
+        required: true
+        default: "enpevaltest2026f4d55454.azurecr.io"
+        type: string
+      include_migrations:
+        description: "Construire aussi les images SQL 026 (QR) et 027 (Audit forensique)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@v4
+
+      - name: Valider les parametres et definir le TAG
+        id: meta
+        env:
+          ACR_SERVER: ${{ inputs.acr_login_server }}
+          HAS_USER: ${{ secrets.ACR_USERNAME != '' }}
+          HAS_PASS: ${{ secrets.ACR_PASSWORD != '' }}
+        run: |
+          if [[ "$HAS_USER" != "true" || "$HAS_PASS" != "true" ]]; then
+            echo "::error::Secrets GitHub manquants : configure ACR_USERNAME et ACR_PASSWORD dans Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [[ ! "$ACR_SERVER" =~ ^[a-zA-Z0-9-]+\.azurecr\.io$ ]]; then
+            echo "::error::Format de serveur ACR invalide (attendu : <nom>.azurecr.io)."
+            exit 1
+          fi
+          TAG="${GITHUB_SHA:0:8}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "acr=$ACR_SERVER" >> "$GITHUB_OUTPUT"
+          echo "TAG=$TAG"
+
+      - name: Initialiser Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Connexion a Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.meta.outputs.acr }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build & Push Migration 026 (QR Presence)
+        if: ${{ inputs.include_migrations }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/sql/Dockerfile.qr-presence-026
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.acr }}/enp-qr-presence-migration:${{ steps.meta.outputs.tag }}
+
+      - name: Build & Push Migration 027 (Audit Forensique)
+        if: ${{ inputs.include_migrations }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/sql/Dockerfile.audit-forensic-027
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.acr }}/enp-audit-forensic-migration:${{ steps.meta.outputs.tag }}
+
+      - name: Build & Push API NestJS
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.acr }}/enp-api:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=enp-api
+          cache-to: type=gha,scope=enp-api,mode=max
+
+      - name: Build & Push Frontend Web (Azure Nginx)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile.azure
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.acr }}/enp-web:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=enp-web
+          cache-to: type=gha,scope=enp-web,mode=max
+
+      - name: Resume de deploiement Azure Cloud Shell
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          ACR: ${{ steps.meta.outputs.acr }}
+          INC_MIG: ${{ inputs.include_migrations }}
+        run: |
+          {
+            echo "## Images publiees sur \`${ACR}\` (TAG \`${TAG}\`)"
+            echo ""
+            if [[ "$INC_MIG" == "true" ]]; then
+              echo "- \`${ACR}/enp-qr-presence-migration:${TAG}\`"
+              echo "- \`${ACR}/enp-audit-forensic-migration:${TAG}\`"
+            fi
+            echo "- \`${ACR}/enp-api:${TAG}\`"
+            echo "- \`${ACR}/enp-web:${TAG}\`"
+            echo ""
+            echo "### Prochaines commandes dans Azure Cloud Shell"
+            echo '```bash'
+            echo "TAG=${TAG}"
+            echo "RG=rg-enp-evaluation-test-sa"
+            echo "APP=enp-evaluation-test"
+            echo "ACR=${ACR}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
