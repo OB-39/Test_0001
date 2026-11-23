@@ -226,8 +226,8 @@ export const ENTREES_MENU: EntreeMenu[] = [
     chemin: "/journal-audit",
     libelle: "Journal d'audit",
     icone: "ScrollText",
-    roles: ["admin", "scolarite"],
-    section: (r: Role) => (r === "admin" ? "Sécurité & Traçabilité" : "Supervision Académique"),
+    roles: ["admin"],
+    section: "Sécurité & Traçabilité",
   },
 ];
 

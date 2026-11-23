@@ -14,6 +14,12 @@ async function bootstrap() {
   const estProduction =
     (configService.get<string>('NODE_ENV') ?? 'development') === 'production';
 
+  // Fait confiance au premier reverse-proxy (Nginx/Cloudflare) pour l'adresse IP reelle
+  const httpInstance = app.getHttpAdapter().getInstance() as {
+    set?: (key: string, val: unknown) => void;
+  };
+  httpInstance.set?.('trust proxy', 1);
+
   app.use(creerMiddlewareEntetesSecurite(estProduction));
 
   // Protection anti-brute-force sur la connexion et la reinitialisation
@@ -65,7 +71,13 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-ENP-Device-Id',
+      'X-ENP-Device-Meta',
+      'X-ENP-Geo',
+    ],
   });
 
   // Validation globale des DTOs

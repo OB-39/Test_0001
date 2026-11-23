@@ -58,8 +58,11 @@ import type {
   PieceJointe,
   VersionSeance,
   LigneAudit,
+  FiltresAuditForensic,
+  RapportIntegriteAudit,
 } from "./types";
 import { ApiError } from "./error";
+import { construireEntetesTelemetrie } from "../utils/forensicTelemetry";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
@@ -170,9 +173,10 @@ async function requete<T>(
   const { method = "GET", body, signal, sansAuth = false } = options;
 
   const multipart = typeof FormData !== "undefined" && body instanceof FormData;
-  const headers: Record<string, string> = multipart
-    ? {}
-    : { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    ...construireEntetesTelemetrie(),
+    ...(multipart ? {} : { "Content-Type": "application/json" }),
+  };
   if (!sansAuth) {
     const token = getAccessToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -538,8 +542,47 @@ export async function marquerNotificationLue(id: number): Promise<void> {
   return requete<void>(`/notifications/${id}/lue`, { method: "POST" });
 }
 
-export async function journalAudit(): Promise<LigneAudit[]> {
-  return requete<LigneAudit[]>("/audit?limite=200");
+export async function journalAudit(
+  filtres?: FiltresAuditForensic,
+): Promise<LigneAudit[]> {
+  const params = new URLSearchParams();
+  params.set("limite", String(filtres?.limite ?? 250));
+  if (filtres?.userId !== undefined) params.set("userId", String(filtres.userId));
+  if (filtres?.role) params.set("role", filtres.role);
+  if (filtres?.categorie) params.set("categorie", filtres.categorie);
+  if (filtres?.gravite) params.set("gravite", filtres.gravite);
+  if (filtres?.ip) params.set("ip", filtres.ip);
+  if (filtres?.dateDebut) params.set("dateDebut", filtres.dateDebut);
+  if (filtres?.dateFin) params.set("dateFin", filtres.dateFin);
+  if (filtres?.recherche) params.set("recherche", filtres.recherche);
+  return requete<LigneAudit[]>(`/audit?${params.toString()}`);
+}
+
+export async function journalAuditUtilisateur(
+  userId: number,
+  limite = 500,
+): Promise<LigneAudit[]> {
+  return requete<LigneAudit[]>(
+    `/audit/utilisateurs/${userId}/historique?limite=${limite}`,
+  );
+}
+
+export async function verifierIntegriteAudit(
+  limite = 500,
+): Promise<RapportIntegriteAudit> {
+  return requete<RapportIntegriteAudit>(`/audit/integrite?limite=${limite}`);
+}
+
+export async function enregistrerEvenementAudit(entree: {
+  action: string;
+  objet?: string;
+  detail?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<ReponseSimple> {
+  return requete<ReponseSimple>("/audit/evenement-client", {
+    method: "POST",
+    body: entree,
+  });
 }
 
 export async function dossierCoursEnseignant(): Promise<CoursDossier[]> {

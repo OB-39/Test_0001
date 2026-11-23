@@ -66,6 +66,10 @@ import type {
   PieceJointe,
   VersionSeance,
   LigneAudit,
+  CategorieAudit,
+  GraviteAudit,
+  FiltresAuditForensic,
+  RapportIntegriteAudit,
 } from "./types";
 import { ApiError } from "./error";
 import {
@@ -75,6 +79,14 @@ import {
   genererJetonPresenceClient,
   parserJetonPresence,
 } from "../utils/qrPresenceToken";
+import {
+  calculerHashEntreeAudit,
+  filtrerLignesAudit,
+  GENESIS_AUDIT_HASH,
+  scellerChaineAudit,
+  verifierIntegriteChaineAudit,
+} from "../utils/auditForensic";
+import { collecterTelemetrieMachine } from "../utils/forensicTelemetry";
 
 /* ------------------------------------------------------------------ */
 /*  Comptes de démonstration                                           */
@@ -519,6 +531,20 @@ export async function connexion(corps: CorpsConnexion): Promise<ReponseLogin> {
   verrouillages.delete(cle(identifiant));
   const rep = fabriquerReponse(compte);
   sessionMemoire = rep;
+  enregistrerAuditMock({
+    userId: compte.id,
+    userMatricule: compte.identifiant,
+    userNomComplet: `${compte.prenom} ${compte.nom}`,
+    userRole: compte.activeRole,
+    categorie: "authentification",
+    gravite: compte.activeRole === "admin" || compte.activeRole === "directeur_general" ? "sensible" : "info",
+    action: "CONNEXION_PORTAIL",
+    methodeHttp: "POST",
+    cheminHttp: "/api/v1/auth/login",
+    statutHttp: 200,
+    objet: "Session portail ENP",
+    detail: `Authentification réussie (${compte.activeRole})`,
+  });
   return rep;
 }
 
@@ -538,6 +564,23 @@ export async function rafraichir(): Promise<ReponseConnexion> {
 
 export async function deconnexion(): Promise<ReponseSimple> {
   await delai();
+  if (sessionMemoire) {
+    const u = sessionMemoire.utilisateur;
+    enregistrerAuditMock({
+      userId: u.id,
+      userMatricule: u.identifiant ?? `USR-${u.id}`,
+      userNomComplet: `${u.prenom} ${u.nom}`,
+      userRole: u.activeRole,
+      categorie: "authentification",
+      gravite: "info",
+      action: "DECONNEXION_PORTAIL",
+      methodeHttp: "POST",
+      cheminHttp: "/api/v1/auth/logout",
+      statutHttp: 200,
+      objet: "Session portail ENP",
+      detail: "Déconnexion volontaire de l'utilisateur",
+    });
+  }
   sessionMemoire = null;
   return { ok: true };
 }
@@ -1733,9 +1776,547 @@ export async function marquerNotificationLue(_id: number): Promise<void> {
   await delai();
 }
 
-export async function journalAudit(): Promise<LigneAudit[]> {
+/* ------------------------------------------------------------------ */
+/*  Journal forensique haute securite (chaine SHA-256, Admin uniquement) */
+/* ------------------------------------------------------------------ */
+
+const SEED_AUDIT_BRUT: LigneAudit[] = [
+  {
+    id: 1,
+    creeLe: "2026-11-22T07:12:04.210Z",
+    userId: 1006,
+    userMatricule: "DEMO-DIR",
+    userNomComplet: "Afi Amavi",
+    userRole: "directeur_general",
+    categorie: "authentification",
+    gravite: "sensible",
+    action: "CONNEXION_MFA_TOTP",
+    methodeHttp: "POST",
+    cheminHttp: "/api/v1/auth/login",
+    statutHttp: 200,
+    dureeMs: 44,
+    ipAddress: "41.207.175.18",
+    ipForwardedChain: "41.207.175.18, 10.0.1.4",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    osNom: "Windows 10/11",
+    navigateurNom: "Chrome 124",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-DG-9F4A2C1B88E0",
+    ecranResolution: "1920x1080",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17648,
+    geoLongitude: 1.21242,
+    geoPrecisionMetres: 11,
+    geoVille: "Lomé (Direction Générale ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom Fibre Campus",
+    sessionId: "SES-DG-8491A",
+    objet: "Authentification Direction Générale",
+    detail: "Connexion validée avec facteur TOTP sur poste fixe Direction",
+  },
+  {
+    id: 2,
+    creeLe: "2026-11-22T07:18:33.540Z",
+    userId: 1006,
+    userMatricule: "DEMO-DIR",
+    userNomComplet: "Afi Amavi",
+    userRole: "directeur_general",
+    categorie: "direction",
+    gravite: "sensible",
+    action: "DIRECTION_CONSULTATION_STATISTIQUES",
+    methodeHttp: "GET",
+    cheminHttp: "/api/v1/direction/statistiques?annee=2026-2027&semestre=1",
+    statutHttp: 200,
+    dureeMs: 62,
+    ipAddress: "41.207.175.18",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    osNom: "Windows 10/11",
+    navigateurNom: "Chrome 124",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-DG-9F4A2C1B88E0",
+    ecranResolution: "1920x1080",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17648,
+    geoLongitude: 1.21242,
+    geoPrecisionMetres: 11,
+    geoVille: "Lomé (Direction Générale ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom Fibre Campus",
+    sessionId: "SES-DG-8491A",
+    objet: "Tableau consolidé multi-campus",
+    detail: "Consultation des taux de participation et indicateurs qualité S1",
+  },
+  {
+    id: 3,
+    creeLe: "2026-11-22T07:29:11.095Z",
+    userId: 1008,
+    userMatricule: "DEMO-CAMPUS",
+    userNomComplet: "Edem Koffi",
+    userRole: "directeur_campus",
+    categorie: "direction",
+    gravite: "sensible",
+    action: "DIRECTION_CONTROLE_ACADEMIQUE",
+    methodeHttp: "GET",
+    cheminHttp: "/api/v1/direction/controles",
+    statutHttp: 200,
+    dureeMs: 39,
+    ipAddress: "41.207.175.29",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 Version/17.4 Safari/605.1.15",
+    osNom: "macOS 14.4",
+    navigateurNom: "Safari 17",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-DC-4B10E7A93D21",
+    ecranResolution: "1440x900",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17492,
+    geoLongitude: 1.21485,
+    geoPrecisionMetres: 15,
+    geoVille: "Lomé (Campus Nord - Bâtiment B)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom Fibre Campus",
+    sessionId: "SES-DC-3102B",
+    objet: "Contrôles réglementaires Campus",
+    detail: "Vérification des anomalies de campagnes et seuils d'anonymat",
+  },
+  {
+    id: 4,
+    creeLe: "2026-11-22T07:45:02.801Z",
+    userId: 1005,
+    userMatricule: "DEMO-SCO",
+    userNomComplet: "Yacine Mokrani",
+    userRole: "scolarite",
+    categorie: "administration",
+    gravite: "sensible",
+    action: "IMPORT_UTILISATEURS_CSV",
+    methodeHttp: "POST",
+    cheminHttp: "/api/v1/scolarite/comptes/import",
+    statutHttp: 201,
+    dureeMs: 284,
+    ipAddress: "41.207.175.44",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/124.0.0.0",
+    osNom: "Windows 10/11",
+    navigateurNom: "Edge 124",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-SCO-77C91D02F11A",
+    ecranResolution: "1600x900",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17581,
+    geoLongitude: 1.21319,
+    geoPrecisionMetres: 12,
+    geoVille: "Lomé (Service Scolarité ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom Fibre Campus",
+    sessionId: "SES-SCO-5519C",
+    objet: "Import promotion L3 Informatique",
+    detail: "Création de 42 comptes étudiants et mise en file d'envoi des codes d'activation",
+    metadata: { totalRows: 42, successCount: 42, errorCount: 0 },
+  },
+  {
+    id: 5,
+    creeLe: "2026-11-22T08:01:15.112Z",
+    userId: 1003,
+    userMatricule: "DEMO-ENS",
+    userNomComplet: "Karim Hamidi",
+    userRole: "enseignant",
+    categorie: "presence",
+    gravite: "info",
+    action: "PRESENCE_QR_SESSION_DEMARREE",
+    methodeHttp: "POST",
+    cheminHttp: "/api/v1/presences/sessions/demarrer",
+    statutHttp: 201,
+    dureeMs: 27,
+    ipAddress: "41.207.176.102",
+    userAgent: "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
+    osNom: "Linux Ubuntu",
+    navigateurNom: "Firefox 125",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-ENS-22D4A8C1903F",
+    ecranResolution: "1920x1080",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17712,
+    geoLongitude: 1.21195,
+    geoPrecisionMetres: 9,
+    geoVille: "Lomé (Amphi A - ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Wi-Fi Enseignants ENP",
+    sessionId: "SES-ENS-9012D",
+    courseId: 201,
+    objet: "INF501 Algorithmique avancée",
+    detail: "Projection QR Code dynamique tournant (rotation 6 s) démarrée en amphithéâtre",
+  },
+  {
+    id: 6,
+    creeLe: "2026-11-22T08:01:41.662Z",
+    userId: 1001,
+    userMatricule: "DEMO-ETU",
+    userNomComplet: "Amine Benali",
+    userRole: "etudiant",
+    categorie: "presence",
+    gravite: "info",
+    action: "SCAN_QR_PRESENCE_VALIDE",
+    methodeHttp: "POST",
+    cheminHttp: "/api/v1/presences/scanner",
+    statutHttp: 200,
+    dureeMs: 19,
+    ipAddress: "102.64.218.77",
+    userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36",
+    osNom: "Android 14",
+    navigateurNom: "Chrome 124",
+    appareilType: "Smartphone",
+    deviceFingerprint: "MCH-ETU-A1B89E4402C7",
+    ecranResolution: "412x915",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17718,
+    geoLongitude: 1.21191,
+    geoPrecisionMetres: 8,
+    geoVille: "Lomé (Amphi A - ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Moov Africa Togo 4G",
+    sessionId: "SES-ETU-7710E",
+    courseId: 201,
+    objet: "Séance CM #12 INF501",
+    detail: "Émargement validé (âge jeton 1,4 s, appareil lié unique)",
+  },
+  {
+    id: 7,
+    creeLe: "2026-11-22T08:14:22.410Z",
+    userId: 1002,
+    userMatricule: "DEMO-DEL",
+    userNomComplet: "Lina Cherif",
+    userRole: "delegue",
+    categorie: "academique",
+    gravite: "info",
+    action: "CAHIER_TEXTE_CREATION_SEANCE",
+    methodeHttp: "POST",
+    cheminHttp: "/api/v1/cahier-texte/seances",
+    statutHttp: 201,
+    dureeMs: 35,
+    ipAddress: "102.64.219.14",
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Version/17.4 Mobile/15E148 Safari/604.1",
+    osNom: "iOS 17.4",
+    navigateurNom: "Safari 17",
+    appareilType: "Smartphone",
+    deviceFingerprint: "MCH-DEL-66E31F8B902A",
+    ecranResolution: "390x844",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17695,
+    geoLongitude: 1.21210,
+    geoPrecisionMetres: 14,
+    geoVille: "Lomé (Campus Nord ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom 4G",
+    sessionId: "SES-DEL-4119F",
+    courseId: 201,
+    objet: "INF501 - Séance CM Graphes",
+    detail: "Saisie du contenu de séance et soumission au visa de l'enseignant",
+  },
+  {
+    id: 8,
+    creeLe: "2026-11-22T08:26:50.004Z",
+    userId: 1004,
+    userMatricule: "DEMO-CHEF",
+    userNomComplet: "Nora Saidi",
+    userRole: "chef_departement",
+    categorie: "export",
+    gravite: "sensible",
+    action: "EXPORT_SYNTHESE_DEPARTEMENT",
+    methodeHttp: "GET",
+    cheminHttp: "/api/v1/exports/synthese?campagneId=1&format=pdf",
+    statutHttp: 200,
+    dureeMs: 142,
+    ipAddress: "41.207.175.33",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    osNom: "Windows 10/11",
+    navigateurNom: "Chrome 124",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-CHF-81A04E7C12D4",
+    ecranResolution: "1920x1080",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17545,
+    geoLongitude: 1.21398,
+    geoPrecisionMetres: 13,
+    geoVille: "Lomé (Département Génie Informatique)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom Fibre Campus",
+    sessionId: "SES-CHF-1884G",
+    objet: "Synthèse départementale S1",
+    detail: "Téléchargement officiel du procès-verbal PDF de synthèse",
+  },
+  {
+    id: 9,
+    creeLe: "2026-11-22T08:42:19.775Z",
+    userId: 1005,
+    userMatricule: "DEMO-SCO",
+    userNomComplet: "Yacine Mokrani",
+    userRole: "scolarite",
+    categorie: "securite",
+    gravite: "alerte",
+    action: "ACCES_REFUSE_403",
+    methodeHttp: "GET",
+    cheminHttp: "/api/v1/audit?limite=200",
+    statutHttp: 403,
+    dureeMs: 6,
+    ipAddress: "41.207.175.44",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/124.0.0.0",
+    osNom: "Windows 10/11",
+    navigateurNom: "Edge 124",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-SCO-77C91D02F11A",
+    ecranResolution: "1600x900",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17581,
+    geoLongitude: 1.21319,
+    geoPrecisionMetres: 12,
+    geoVille: "Lomé (Service Scolarité ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom Fibre Campus",
+    sessionId: "SES-SCO-5519C",
+    objet: "/api/v1/audit",
+    detail: "Tentative d'accès au journal forensique bloquée : accès réservé exclusivement à l'administrateur",
+  },
+  {
+    id: 10,
+    creeLe: "2026-11-22T09:05:11.309Z",
+    userId: 1006,
+    userMatricule: "DEMO-DIR",
+    userNomComplet: "Afi Amavi",
+    userRole: "directeur_general",
+    categorie: "direction",
+    gravite: "alerte",
+    action: "DIRECTION_PUBLICATION_STATISTIQUES",
+    methodeHttp: "POST",
+    cheminHttp: "/api/v1/direction/statistiques/publier",
+    statutHttp: 200,
+    dureeMs: 91,
+    ipAddress: "102.64.221.93",
+    ipForwardedChain: "102.64.221.93, 10.0.1.4",
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Version/17.4 Mobile/15E148 Safari/604.1",
+    osNom: "iOS 17.4",
+    navigateurNom: "Safari 17",
+    appareilType: "Smartphone",
+    deviceFingerprint: "MCH-DG-MOBILE-51C0E2",
+    ecranResolution: "430x932",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.13194,
+    geoLongitude: 1.22278,
+    geoPrecisionMetres: 18,
+    geoVille: "Lomé (Quartier Administratif / Tokoin)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom 4G Mobile",
+    sessionId: "SES-DG-9920M",
+    objet: "Publication officielle S1 2026-2027",
+    detail: "Publication déclenchée depuis un second appareil mobile hors réseau campus (changement d'IP et de machine détecté)",
+    metadata: { anneeUniversitaire: "2026-2027", semestre: 1 },
+  },
+  {
+    id: 11,
+    creeLe: "2026-11-22T09:14:00.120Z",
+    userId: 1007,
+    userMatricule: "DEMO-ADMIN",
+    userNomComplet: "Demo Administrateur",
+    userRole: "admin",
+    categorie: "securite",
+    gravite: "sensible",
+    action: "AUDIT_VERIFICATION_INTEGRITE",
+    methodeHttp: "GET",
+    cheminHttp: "/api/v1/audit/integrite",
+    statutHttp: 200,
+    dureeMs: 14,
+    ipAddress: "41.207.175.10",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    osNom: "Windows 10/11",
+    navigateurNom: "Chrome 124",
+    appareilType: "Desktop",
+    deviceFingerprint: "MCH-ADM-00F1B8C934AA",
+    ecranResolution: "2560x1440",
+    fuseauHoraire: "Africa/Lome",
+    langue: "fr-FR",
+    geoSource: "gps_precis",
+    geoLatitude: 6.17635,
+    geoLongitude: 1.21255,
+    geoPrecisionMetres: 7,
+    geoVille: "Lomé (Salle Serveurs / DSI ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Togocom Fibre Campus",
+    sessionId: "SES-ADM-0001Z",
+    objet: "Chaîne cryptographique SHA-256",
+    detail: "Contrôle périodique d'intégrité du journal WORM : aucune altération détectée",
+  },
+];
+
+const auditJournalMemoire: LigneAudit[] = scellerChaineAudit(SEED_AUDIT_BRUT);
+
+function enregistrerAuditMock(entree: {
+  userId?: number;
+  userMatricule?: string;
+  userNomComplet?: string;
+  userRole?: Role;
+  categorie: CategorieAudit;
+  gravite: GraviteAudit;
+  action: string;
+  methodeHttp?: string;
+  cheminHttp?: string;
+  statutHttp?: number;
+  objet?: string;
+  detail?: string;
+  metadata?: Record<string, unknown>;
+}): void {
+  const tel = collecterTelemetrieMachine();
+  const precedent = auditJournalMemoire[auditJournalMemoire.length - 1];
+  const nextId = (precedent?.id ?? 0) + 1;
+  const previousHash = precedent?.entryHash ?? GENESIS_AUDIT_HASH;
+
+  const nouvelle: LigneAudit = {
+    id: nextId,
+    creeLe: new Date().toISOString(),
+    userId: entree.userId,
+    userMatricule: entree.userMatricule,
+    userNomComplet: entree.userNomComplet,
+    userRole: entree.userRole,
+    categorie: entree.categorie,
+    gravite: entree.gravite,
+    action: entree.action,
+    methodeHttp: entree.methodeHttp ?? "CLIENT",
+    cheminHttp: entree.cheminHttp ?? entree.objet,
+    statutHttp: entree.statutHttp ?? 200,
+    dureeMs: 12,
+    ipAddress: "41.207.175.10",
+    userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "ENP-Client",
+    osNom: tel.osNom,
+    navigateurNom: tel.navigateurNom,
+    appareilType: tel.appareilType,
+    deviceFingerprint: tel.deviceFingerprint,
+    ecranResolution: tel.ecranResolution,
+    fuseauHoraire: tel.fuseauHoraire,
+    langue: tel.langue,
+    geoSource: tel.geo?.source === "gps_precis" ? "gps_precis" : "campus_enp",
+    geoLatitude: tel.geo?.latitude ?? 6.17635,
+    geoLongitude: tel.geo?.longitude ?? 1.21255,
+    geoPrecisionMetres: tel.geo?.precisionMetres ?? 15,
+    geoVille: tel.geo?.source === "gps_precis" ? "Position GPS vérifiée" : "Lomé (Campus ENP)",
+    geoRegion: "Maritime",
+    geoPays: "Togo",
+    geoFai: "Réseau ENP Lomé",
+    sessionId: sessionMemoire ? `SES-${sessionMemoire.utilisateur.id}` : undefined,
+    objet: entree.objet,
+    detail: entree.detail,
+    metadata: entree.metadata,
+    previousHash,
+  };
+  nouvelle.entryHash = calculerHashEntreeAudit(nouvelle);
+  auditJournalMemoire.push(nouvelle);
+}
+
+function exigerAdminAudit(): void {
+  if (!sessionMemoire || sessionMemoire.utilisateur.activeRole !== "admin") {
+    throw new ApiError({
+      message:
+        "Accès strictement refusé : le journal forensique est réservé exclusivement à l'administrateur système.",
+      statusCode: 403,
+    });
+  }
+}
+
+export async function journalAudit(
+  filtres?: FiltresAuditForensic,
+): Promise<LigneAudit[]> {
   await delai();
-  return [];
+  exigerAdminAudit();
+  const trieDesc = [...auditJournalMemoire].sort(
+    (a, b) => Date.parse(b.creeLe) - Date.parse(a.creeLe) || b.id - a.id,
+  );
+  const filtrees = filtres ? filtrerLignesAudit(trieDesc, filtres) : trieDesc;
+  return filtrees.slice(0, filtres?.limite ?? 250);
+}
+
+export async function journalAuditUtilisateur(
+  userId: number,
+  limite = 500,
+): Promise<LigneAudit[]> {
+  await delai();
+  exigerAdminAudit();
+  return auditJournalMemoire
+    .filter((l) => l.userId === userId)
+    .sort((a, b) => Date.parse(b.creeLe) - Date.parse(a.creeLe) || b.id - a.id)
+    .slice(0, limite);
+}
+
+export async function verifierIntegriteAudit(): Promise<RapportIntegriteAudit> {
+  await delai();
+  exigerAdminAudit();
+  return verifierIntegriteChaineAudit(auditJournalMemoire);
+}
+
+export async function enregistrerEvenementAudit(entree: {
+  action: string;
+  objet?: string;
+  detail?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<ReponseSimple> {
+  if (!sessionMemoire) return { ok: true };
+  // Eviter d'enregistrer en double le polling silencieux sur le journal lui-meme
+  const dernier = auditJournalMemoire[auditJournalMemoire.length - 1];
+  if (
+    dernier &&
+    dernier.userId === sessionMemoire.utilisateur.id &&
+    dernier.action === entree.action &&
+    dernier.objet === entree.objet &&
+    Date.now() - Date.parse(dernier.creeLe) < 2500
+  ) {
+    return { ok: true };
+  }
+  const u = sessionMemoire.utilisateur;
+  enregistrerAuditMock({
+    userId: u.id,
+    userMatricule: u.identifiant ?? `USR-${u.id}`,
+    userNomComplet: `${u.prenom} ${u.nom}`,
+    userRole: u.activeRole,
+    categorie: entree.objet?.startsWith("/journal-audit")
+      ? "securite"
+      : entree.objet?.startsWith("/direction")
+        ? "direction"
+        : "navigation",
+    gravite: entree.objet?.startsWith("/journal-audit") ? "sensible" : "info",
+    action: entree.action,
+    methodeHttp: "GET",
+    cheminHttp: entree.objet,
+    statutHttp: 200,
+    objet: entree.objet,
+    detail: entree.detail,
+    metadata: entree.metadata,
+  });
+  return { ok: true };
 }
 
 export async function dossierCoursEnseignant(): Promise<CoursDossier[]> {

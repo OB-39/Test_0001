@@ -212,7 +212,7 @@ export default function App() {
                   <Route
                     path="/journal-audit"
                     element={
-                      <RequireRole roles={["admin", "scolarite"]}>
+                      <RequireRole role="admin">
                         <JournalAudit />
                       </RequireRole>
                     }

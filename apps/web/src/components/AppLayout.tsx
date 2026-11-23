@@ -47,6 +47,7 @@ import type { Notification, Role } from '@/api/types';
 import { PwaInstallBanner } from '@/pwa/PwaInstallBanner';
 import { PwaStatusBar } from '@/pwa/PwaStatusBar';
 import { usePwaInstall } from '@/pwa/usePwaInstall';
+import { initialiserCaptureGeolocalisation } from '@/utils/forensicTelemetry';
 
 const ICONES_MENU: Record<string, LucideIcon> = {
   ClipboardCheck,
@@ -168,10 +169,21 @@ export function AppLayout() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [menuProfilOuvert, setMenuProfilOuvert] = useState(false);
 
-  // Remonter en haut de page a chaque changement de route
+  // Remonter en haut de page et tracer la consultation de l'ecran
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [pathname]);
+    initialiserCaptureGeolocalisation();
+    if (!utilisateur) return;
+    void api
+      .enregistrerEvenementAudit({
+        action: 'CONSULTATION_ECRAN',
+        objet: pathname,
+        detail: `Accès à l'écran ${pathname}`,
+      })
+      .catch(() => {
+        // Ne bloque jamais la navigation en cas d'incident reseau
+      });
+  }, [pathname, utilisateur]);
 
   // Charger les notifications a la connexion puis toutes les 60 s (evite les appels redondants par route)
   useEffect(() => {

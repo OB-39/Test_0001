@@ -118,9 +118,9 @@ const ENGAGEMENTS_SECURITE = [
       'Les comptes sensibles (administration, scolarité, direction, chefs de département) bénéficient d’une double authentification par code e-mail ou application TOTP.',
   },
   {
-    titre: 'Traçabilité respectueuse de la vie privée',
+    titre: 'Journal de sécurité haute traçabilité (Administrateur)',
     texte:
-      'Les opérations académiques et administratives majeures sont consignées dans le journal d’audit institutionnel, sans jamais conserver les votes individuels ni les adresses IP.',
+      'Chaque accès et opération critique sur le portail est scellé dans un journal d’audit inviolable réservé exclusivement à l’administrateur système, tandis que le contenu des bulletins d’évaluation reste strictement séparé et anonyme.',
   },
 ];
 

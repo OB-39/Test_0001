@@ -200,6 +200,28 @@ des programmes doit ensuite etre verifiee avec un compte Scolarite rattache a
 un campus. L'import `mandats-chefs-departement` utilise le catalogue existant
 des affectations des chefs et ne necessite pas de migration supplementaire.
 
+### Emargement QR dynamique (026) et Journal d'audit forensique (027)
+
+Avant le deploiement de l'API/web qui active l'emargement QR dynamique et le
+journal d'audit forensique scelle par HMAC, appliquer successivement les
+migrations 026 puis 027 apres la migration 025 :
+
+```powershell
+az acr build --registry <NOM_ACR> --image enp-qr-presence-migration:<TAG> --file infra/sql/Dockerfile.qr-presence-026 .
+az containerapp job update --resource-group <RESOURCE_GROUP> --name db-migration-job --image <NOM_ACR>.azurecr.io/enp-qr-presence-migration:<TAG>
+az containerapp job start --resource-group <RESOURCE_GROUP> --name db-migration-job
+```
+
+Attendre le statut `Succeeded`, puis executer la migration 027 :
+
+```powershell
+az acr build --registry <NOM_ACR> --image enp-audit-forensic-migration:<TAG> --file infra/sql/Dockerfile.audit-forensic-027 .
+az containerapp job update --resource-group <RESOURCE_GROUP> --name db-migration-job --image <NOM_ACR>.azurecr.io/enp-audit-forensic-migration:<TAG>
+az containerapp job start --resource-group <RESOURCE_GROUP> --name db-migration-job
+```
+
+Attendre le statut `Succeeded` avant de mettre a jour les conteneurs `api` et `web`.
+
 `Dockerfile.azure` construit le frontend avec `VITE_USE_MOCK=false` et
 `VITE_API_BASE_URL=/api/v1` : le mode maquette n'est donc pas embarque en
 production ; le module contenant les comptes de demonstration est remplace
@@ -248,11 +270,12 @@ ACCESS_TOKEN_TTL_MINUTES=15
 Injecter par Key Vault/Container Apps secrets, avec des valeurs aleatoires et
 independantes : `DATABASE_URL`, `DATABASE_URL_BALLOT`, `DATABASE_URL_RESULTS`,
 `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `BALLOT_TOKEN_SECRET`,
-`MFA_CHALLENGE_SECRET`, `MFA_ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`,
-`SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` et `SMTP_FROM`. La cle
-`MFA_ENCRYPTION_KEY` doit etre de 64 caracteres hexadecimaux. Garder une copie
-securisee des secrets MFA : leur perte peut rendre les secrets TOTP existants
-illisibles.
+`MFA_CHALLENGE_SECRET`, `MFA_ENCRYPTION_KEY`, `QR_PRESENCE_SECRET`,
+`AUDIT_HMAC_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
+`SMTP_PASSWORD` et `SMTP_FROM`. La cle `MFA_ENCRYPTION_KEY` doit etre de 64
+caracteres hexadecimaux. Garder une copie securisee des secrets MFA et de
+`AUDIT_HMAC_SECRET` : leur perte peut rendre les secrets TOTP existants
+illisibles ou rompre la verification HMAC des entrees d'audit anterieures.
 
 Les comptes crees/importes par l'admin ou la Scolarite mettent leur courriel
 d'activation dans `system.email_outbox`; le worker retente les echecs. Le bouton

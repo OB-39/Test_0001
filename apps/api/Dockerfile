@@ -2,7 +2,7 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY . .
-RUN cd apps/api && npm ci && npm run build
+RUN cd apps/api && (npm ci || npm install --no-audit --no-fund) && npm run build
 RUN cd apps/api && npm prune --omit=dev --no-audit --no-fund
 
 FROM node:24-alpine AS runtime

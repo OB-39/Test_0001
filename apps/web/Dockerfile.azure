@@ -2,7 +2,7 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY . .
-RUN cd apps/web && npm ci && VITE_USE_MOCK=false VITE_API_BASE_URL=/api/v1 npm run build
+RUN cd apps/web && (npm ci || npm install --no-audit --no-fund) && VITE_USE_MOCK=false VITE_API_BASE_URL=/api/v1 npm run build
 
 FROM nginx:1.27-alpine
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html

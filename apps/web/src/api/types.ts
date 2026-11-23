@@ -206,16 +206,117 @@ export interface Notification {
   luLe?: string;
 }
 
+export type CategorieAudit =
+  | "authentification"
+  | "navigation"
+  | "academique"
+  | "presence"
+  | "administration"
+  | "direction"
+  | "securite"
+  | "export";
+
+export type GraviteAudit = "info" | "sensible" | "alerte" | "critique";
+
+export type SourceGeoAudit = "gps_precis" | "ip_reseau" | "campus_enp" | "fuseau_navigateur";
+
 export interface LigneAudit {
   id: number;
   creeLe: string;
   userId?: number;
   userMatricule?: string;
+  userNomComplet?: string;
+  userRole?: Role;
+  categorie?: CategorieAudit;
+  gravite?: GraviteAudit;
   action: string;
+  methodeHttp?: string;
+  cheminHttp?: string;
+  statutHttp?: number;
+  dureeMs?: number;
+  ipAddress?: string;
+  ipForwardedChain?: string;
+  userAgent?: string;
+  osNom?: string;
+  navigateurNom?: string;
+  appareilType?: string;
+  deviceFingerprint?: string;
+  ecranResolution?: string;
+  fuseauHoraire?: string;
+  langue?: string;
+  geoSource?: SourceGeoAudit;
+  geoLatitude?: number;
+  geoLongitude?: number;
+  geoPrecisionMetres?: number;
+  geoVille?: string;
+  geoRegion?: string;
+  geoPays?: string;
+  geoFai?: string;
+  sessionId?: string;
   campaignId?: number;
   courseId?: number;
   objet?: string;
   detail?: string;
+  metadata?: Record<string, unknown>;
+  previousHash?: string;
+  entryHash?: string;
+  hmacSignature?: string;
+}
+
+export interface FiltresAuditForensic {
+  userId?: number;
+  role?: Role | "";
+  categorie?: CategorieAudit | "";
+  gravite?: GraviteAudit | "";
+  ip?: string;
+  dateDebut?: string;
+  dateFin?: string;
+  recherche?: string;
+  limite?: number;
+}
+
+export interface RapportIntegriteAudit {
+  intact: boolean;
+  totalVerifie: number;
+  dernierHash?: string;
+  verifieLe: string;
+  anomalies: { id: number; raison: string }[];
+}
+
+export interface DossierUtilisateurAudit {
+  userId: number;
+  userMatricule: string;
+  userNomComplet: string;
+  userRole?: Role;
+  totalActions: number;
+  nombreAlertes: number;
+  premiereActivite: string;
+  derniereActivite: string;
+  adressesIp: {
+    ip: string;
+    occurrences: number;
+    derniereVue: string;
+    localisation: string;
+  }[];
+  machines: {
+    empreinte: string;
+    osNom: string;
+    navigateurNom: string;
+    appareilType: string;
+    ecranResolution?: string;
+    occurrences: number;
+    derniereVue: string;
+  }[];
+  localisations: {
+    libelle: string;
+    latitude?: number;
+    longitude?: number;
+    precisionMetres?: number;
+    source?: SourceGeoAudit;
+    occurrences: number;
+    derniereVue: string;
+  }[];
+  evenements: LigneAudit[];
 }
 
 export interface PieceJointe {
