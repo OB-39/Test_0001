@@ -116,4 +116,34 @@ describe('QrPresenceService', () => {
       service.scannerPresence(1001, token, 'device-fp-abcdef123456'),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('demarrerSession utilise ref.course_teacher et COALESCE(u.matricule, u.email)', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          seance_id: 10,
+          course_id: 401,
+          code_ue: 'UE_TEST_QR',
+          intitule_ue: 'Ue_test_QR',
+          libelle_seance: 'Seance test',
+          date_seance: '2026-11-23',
+        },
+      ])
+      .mockResolvedValueOnce([sessionOuverteRow])
+      .mockResolvedValueOnce([{ total: 2 }])
+      .mockResolvedValueOnce([{ total: 1 }])
+      .mockResolvedValueOnce([]);
+
+    const service = creerService(query);
+    const res = await service.demarrerSession(1003, 10);
+
+    expect(res.codeUe).toBe('UE_TEST_QR');
+    const sqlVerif = String(query.mock.calls[0]?.[0] ?? '');
+    const sqlRecents = String(query.mock.calls[4]?.[0] ?? '');
+    expect(sqlVerif).toContain('ref.course_teacher');
+    expect(sqlVerif).not.toContain('ref.teaching_assignment');
+    expect(sqlRecents).toContain('COALESCE(u.matricule, u.email)');
+    expect(sqlRecents).not.toContain('u.identifiant');
+  });
 });

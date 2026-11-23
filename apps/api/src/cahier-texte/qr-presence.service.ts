@@ -127,8 +127,8 @@ export class QrPresenceService {
        FROM academic.attendance_sessions s
        JOIN ref.course c ON c.id = s.course_id
        JOIN ref.ue u ON u.id = c.ue_id
-       JOIN ref.teaching_assignment ta
-         ON ta.course_id = s.course_id AND ta.teacher_id = $2
+       JOIN ref.course_teacher ct
+         ON ct.course_id = s.course_id AND ct.teacher_id = $2
        WHERE s.id = $1`,
       [seanceId, enseignantId],
     );
@@ -164,7 +164,7 @@ export class QrPresenceService {
            l.etudiant_id,
            u.nom,
            u.prenom,
-           u.identifiant,
+           COALESCE(u.matricule, u.email) AS identifiant,
            l.scanne_a::text AS scanne_a
          FROM academic.presence_scan_log l
          JOIN identity.users u ON u.id = l.etudiant_id
@@ -512,6 +512,11 @@ export class QrPresenceService {
     }
 
     const session = sessions[0];
+    if (session.statut === 'pause') {
+      throw new ForbiddenException(
+        "L'emargement est temporairement mis en pause par l'enseignant.",
+      );
+    }
     if (session.statut !== 'ouverte') {
       throw new ForbiddenException(
         "L'emargement a ete cloture par l'enseignant.",
@@ -566,35 +571,45 @@ export class QrPresenceService {
       );
     }
 
-    const scanneA = await this.db.transaction(async (query) => {
-      const inserted = await query<{ scanne_a: string }>(
-        `INSERT INTO academic.presence_scan_log
-           (seance_id, etudiant_id, token_counter, token_age_ms, ip_address, device_fingerprint, statut)
-         VALUES ($1, $2, $3, $4, $5, $6, 'valide')
-         RETURNING scanne_a::text AS scanne_a`,
-        [
-          session.seance_id,
-          etudiantId,
-          verification.counter ?? meta.counter,
-          verification.tokenAgeMs ?? 0,
-          ipAddress?.slice(0, 45) ?? null,
-          deviceFingerprint,
-        ],
-      );
+    let scanneA: string;
+    try {
+      scanneA = await this.db.transaction(async (query) => {
+        const inserted = await query<{ scanne_a: string }>(
+          `INSERT INTO academic.presence_scan_log
+             (seance_id, etudiant_id, token_counter, token_age_ms, ip_address, device_fingerprint, statut)
+           VALUES ($1, $2, $3, $4, $5, $6, 'valide')
+           RETURNING scanne_a::text AS scanne_a`,
+          [
+            session.seance_id,
+            etudiantId,
+            verification.counter ?? meta.counter,
+            verification.tokenAgeMs ?? 0,
+            ipAddress?.slice(0, 45) ?? null,
+            deviceFingerprint,
+          ],
+        );
 
-      await query(
-        `INSERT INTO academic.attendance_records
-           (session_id, course_id, student_id, statut, updated_by, updated_at)
-         VALUES ($1, $2, $3, 'present', $4, NOW())
-         ON CONFLICT (session_id, student_id) DO UPDATE
-           SET statut = 'present',
-               updated_by = EXCLUDED.updated_by,
-               updated_at = NOW()`,
-        [session.seance_id, session.course_id, etudiantId, session.enseignant_id],
-      );
+        await query(
+          `INSERT INTO academic.attendance_records
+             (session_id, course_id, student_id, statut, updated_by, updated_at)
+           VALUES ($1, $2, $3, 'present', $4, NOW())
+           ON CONFLICT (session_id, student_id) DO UPDATE
+             SET statut = 'present',
+                 updated_by = EXCLUDED.updated_by,
+                 updated_at = NOW()`,
+          [session.seance_id, session.course_id, etudiantId, session.enseignant_id],
+        );
 
-      return inserted[0]?.scanne_a ?? new Date().toISOString();
-    });
+        return inserted[0]?.scanne_a ?? new Date().toISOString();
+      });
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code === '23505') {
+        throw new ConflictException(
+          'Vous avez deja emarge pour cette seance.',
+        );
+      }
+      throw err;
+    }
 
     const heure = new Date(scanneA).toLocaleTimeString('fr-FR', {
       hour: '2-digit',

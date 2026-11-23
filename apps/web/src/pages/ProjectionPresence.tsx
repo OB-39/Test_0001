@@ -58,13 +58,15 @@ export function ProjectionPresence() {
   const [pulseKey, setPulseKey] = useState(0);
 
   const dernierCounterRef = useRef<number>(0);
+  const dernierTokenRef = useRef<string>('');
   const dernierTokenAtRef = useRef<number>(Date.now());
   const estModeMock = import.meta.env.VITE_USE_MOCK === 'true';
 
   const appliquerSession = useCallback((data: SessionQrPresence) => {
     setSession(data);
-    if (data.counter !== dernierCounterRef.current) {
+    if (data.counter !== dernierCounterRef.current || (data.token && data.token !== dernierTokenRef.current)) {
       dernierCounterRef.current = data.counter;
+      dernierTokenRef.current = data.token;
       dernierTokenAtRef.current = Date.now();
       setTempsRestantMs(DUREE_ROTATION_MS);
       setPulseKey((k) => k + 1);
@@ -126,13 +128,13 @@ export function ProjectionPresence() {
     return () => window.clearInterval(timer);
   }, []);
 
-  // Polling regulier (toutes les 3 secondes) pour compteur temps reel et rotation a 6 secondes
+  // Polling aligne sur la rotation de 6 secondes (5,5 s avec 2,5 s de recouvrement dans la fenetre serveur de 8 s)
   const statutSession = session?.statut;
   useEffect(() => {
     if (statutSession !== 'ouverte') return;
     const poll = window.setInterval(() => {
       void rafraichir();
-    }, 3000);
+    }, 5500);
     return () => window.clearInterval(poll);
   }, [statutSession, rafraichir]);
 
@@ -169,7 +171,7 @@ export function ProjectionPresence() {
   }
 
   async function cloturerEmargement() {
-    if (!session || session.statut !== 'ouverte') return;
+    if (!session || session.statut === 'fermee') return;
     const confirme = await confirmer({
       title: "Clôturer définitivement l'émargement ?",
       message: `La session d'émargement pour ${session.codeUe} sera fermée (${session.presents} présent(s) sur ${session.inscrits}). Tout nouveau scan étudiant sera immédiatement bloqué.`,

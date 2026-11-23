@@ -183,14 +183,22 @@ export function QrScannerModal({
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
       streamRef.current = stream;
 
       const videoTrack = stream.getVideoTracks()[0];
@@ -226,7 +234,7 @@ export function QrScannerModal({
               ctx.drawImage(v, 0, 0, c.width, c.height);
               const imageData = ctx.getImageData(0, 0, c.width, c.height);
               const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'dontInvert',
+                inversionAttempts: 'attemptBoth',
               });
               if (code && code.data) {
                 void soumettreJeton(code.data);

@@ -113,7 +113,7 @@ export function EnseignantPresences() {
     try {
       const [liste, justifs] = await Promise.all([
         api.dossierSeancesPresence(courseId),
-        api.dossierListerJustificatifs(courseId),
+        api.dossierListerJustificatifs(courseId).catch(() => []),
       ]);
       setSeances(liste);
       setJustificatifs(justifs);

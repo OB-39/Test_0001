@@ -78,7 +78,7 @@ export function EtudiantPresences() {
     try {
       const [presencesData, justifsData] = await Promise.all([
         api.dossierMesPresences(),
-        api.dossierListerJustificatifs(),
+        api.dossierListerJustificatifs().catch(() => []),
       ]);
       setDonnees(presencesData);
       setJustificatifs(justifsData);
