@@ -96,14 +96,64 @@ interface RecentRow {
   scanne_a: string;
 }
 
+interface SessionScanRow extends SessionRow {
+  course_id: number;
+  code_ue: string;
+  intitule_ue: string;
+  libelle_seance: string;
+  date_seance: string;
+}
+
+interface CacheSessionEntree {
+  data: SessionScanRow;
+  expiresAt: number;
+}
+
+interface PreCheckScanRow {
+  inscrit: boolean;
+  deja_scan: boolean;
+  appareil_utilise: boolean;
+}
+
+const TTL_CACHE_SESSION_MS = 2_000;
+const TAILLE_MAX_CACHE_SESSION = 500;
+
 @Injectable()
 export class QrPresenceService {
   private readonly fallbackSecret = randomBytes(32).toString('hex');
+  private readonly sessionCache = new Map<number, CacheSessionEntree>();
 
   constructor(
     private readonly db: DatabaseService,
     private readonly config: ConfigService,
   ) {}
+
+  private invaliderCacheSession(seanceId: number): void {
+    this.sessionCache.delete(seanceId);
+  }
+
+  private lireSessionEnCache(seanceId: number): SessionScanRow | null {
+    const entree = this.sessionCache.get(seanceId);
+    if (!entree) return null;
+    if (Date.now() >= entree.expiresAt) {
+      this.sessionCache.delete(seanceId);
+      return null;
+    }
+    return entree.data;
+  }
+
+  private ecrireSessionEnCache(seanceId: number, data: SessionScanRow): void {
+    if (this.sessionCache.size >= TAILLE_MAX_CACHE_SESSION) {
+      const premiereCle = this.sessionCache.keys().next().value;
+      if (premiereCle !== undefined) {
+        this.sessionCache.delete(premiereCle);
+      }
+    }
+    this.sessionCache.set(seanceId, {
+      data,
+      expiresAt: Date.now() + TTL_CACHE_SESSION_MS,
+    });
+  }
 
   private secretCleSession(sessionSecret: string): string {
     const serverSecret =
@@ -212,6 +262,7 @@ export class QrPresenceService {
     );
 
     const session = rows[0];
+    this.invaliderCacheSession(seanceId);
     const jeton = genererJetonPresence(
       seanceId,
       session.token_counter,
@@ -328,6 +379,7 @@ export class QrPresenceService {
     }
 
     const session = rows[0];
+    this.invaliderCacheSession(seanceId);
     const stats = await this.chargerCompteursEtRecents(
       seanceId,
       seance.course_id,
@@ -378,6 +430,7 @@ export class QrPresenceService {
     }
 
     const session = rows[0];
+    this.invaliderCacheSession(seanceId);
     const jeton = genererJetonPresence(
       seanceId,
       session.token_counter,
@@ -433,6 +486,7 @@ export class QrPresenceService {
     }
 
     const session = rows[0];
+    this.invaliderCacheSession(seanceId);
     const stats = await this.chargerCompteursEtRecents(
       seanceId,
       seance.course_id,
@@ -473,45 +527,44 @@ export class QrPresenceService {
       );
     }
 
-    const sessions = await this.db.query<
-      SessionRow & {
-        course_id: number;
-        code_ue: string;
-        intitule_ue: string;
-        libelle_seance: string;
-        date_seance: string;
-      }
-    >(
-      `SELECT
-         sps.id,
-         sps.seance_id,
-         sps.enseignant_id,
-         sps.statut,
-         sps.session_secret,
-         sps.token_counter,
-         sps.ouvert_a::text AS ouvert_a,
-         sps.ferme_a::text AS ferme_a,
-         sps.duree_validite_secondes,
-         s.course_id,
-         u.code AS code_ue,
-         u.intitule AS intitule_ue,
-         s.libelle AS libelle_seance,
-         to_char(s.date, 'YYYY-MM-DD') AS date_seance
-       FROM academic.seance_presence_session sps
-       JOIN academic.attendance_sessions s ON s.id = sps.seance_id
-       JOIN ref.course c ON c.id = s.course_id
-       JOIN ref.ue u ON u.id = c.ue_id
-       WHERE sps.seance_id = $1`,
-      [meta.seanceId],
-    );
-
-    if (sessions.length === 0) {
-      throw new NotFoundException(
-        "Aucune session d'emargement active pour cette seance.",
+    let session = this.lireSessionEnCache(meta.seanceId);
+    if (!session) {
+      const sessions = await this.db.query<SessionScanRow>(
+        `SELECT
+           sps.id,
+           sps.seance_id,
+           sps.enseignant_id,
+           sps.statut,
+           sps.session_secret,
+           sps.token_counter,
+           sps.ouvert_a::text AS ouvert_a,
+           sps.ferme_a::text AS ferme_a,
+           sps.duree_validite_secondes,
+           s.course_id,
+           u.code AS code_ue,
+           u.intitule AS intitule_ue,
+           s.libelle AS libelle_seance,
+           to_char(s.date, 'YYYY-MM-DD') AS date_seance
+         FROM academic.seance_presence_session sps
+         JOIN academic.attendance_sessions s ON s.id = sps.seance_id
+         JOIN ref.course c ON c.id = s.course_id
+         JOIN ref.ue u ON u.id = c.ue_id
+         WHERE sps.seance_id = $1`,
+        [meta.seanceId],
       );
+
+      if (sessions.length === 0) {
+        throw new NotFoundException(
+          "Aucune session d'emargement active pour cette seance.",
+        );
+      }
+
+      session = sessions[0];
+      if (session.statut === 'ouverte') {
+        this.ecrireSessionEnCache(meta.seanceId, session);
+      }
     }
 
-    const session = sessions[0];
     if (session.statut === 'pause') {
       throw new ForbiddenException(
         "L'emargement est temporairement mis en pause par l'enseignant.",
@@ -535,37 +588,39 @@ export class QrPresenceService {
       );
     }
 
-    const inscription = await this.db.query<{ ok: number }>(
-      `SELECT 1 AS ok FROM ref.enrollment WHERE course_id = $1 AND student_id = $2`,
-      [session.course_id, etudiantId],
+    // Une seule requete SQL combinee pour verifier inscription, doublon et appareil
+    const preCheckRows = await this.db.query<PreCheckScanRow>(
+      `SELECT
+         EXISTS(
+           SELECT 1 FROM ref.enrollment
+           WHERE course_id = $1 AND student_id = $2
+         ) AS inscrit,
+         EXISTS(
+           SELECT 1 FROM academic.presence_scan_log
+           WHERE seance_id = $3 AND etudiant_id = $2 AND statut = 'valide'
+         ) AS deja_scan,
+         EXISTS(
+           SELECT 1 FROM academic.presence_scan_log
+           WHERE seance_id = $3
+             AND device_fingerprint = $4
+             AND etudiant_id <> $2
+             AND statut = 'valide'
+         ) AS appareil_utilise`,
+      [session.course_id, etudiantId, session.seance_id, deviceFingerprint],
     );
-    if (inscription.length === 0) {
+
+    const preCheck = preCheckRows[0];
+    if (!preCheck?.inscrit) {
       throw new ForbiddenException(
         "Vous n'etes pas inscrit a cette unite d'enseignement.",
       );
     }
-
-    const dejaScan = await this.db.query<{ id: number }>(
-      `SELECT id FROM academic.presence_scan_log
-       WHERE seance_id = $1 AND etudiant_id = $2 AND statut = 'valide'`,
-      [session.seance_id, etudiantId],
-    );
-    if (dejaScan.length > 0) {
+    if (preCheck.deja_scan) {
       throw new ConflictException(
         'Vous avez deja emarge pour cette seance.',
       );
     }
-
-    const appareilUtilise = await this.db.query<{ etudiant_id: number }>(
-      `SELECT etudiant_id FROM academic.presence_scan_log
-       WHERE seance_id = $1
-         AND device_fingerprint = $2
-         AND etudiant_id <> $3
-         AND statut = 'valide'
-       LIMIT 1`,
-      [session.seance_id, deviceFingerprint, etudiantId],
-    );
-    if (appareilUtilise.length > 0) {
+    if (preCheck.appareil_utilise) {
       throw new ForbiddenException(
         'Cet appareil a deja ete utilise pour un emargement pour cette seance.',
       );

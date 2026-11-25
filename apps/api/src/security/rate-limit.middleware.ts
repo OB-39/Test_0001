@@ -8,6 +8,7 @@ export interface OptionsLimiteurDebit {
   fenetreMs: number;
   maxRequetes: number;
   message?: string;
+  clePersonnalisee?: (req: Request, ipBrute: string) => string;
 }
 
 /**
@@ -21,7 +22,7 @@ export function creerMiddlewareEntetesSecurite(estProduction: boolean) {
     res.setHeader('X-DNS-Prefetch-Control', 'off');
     res.setHeader(
       'Permissions-Policy',
-      'camera=(self), microphone=(), geolocation=()',
+      'camera=(self), microphone=(), geolocation=(self)',
     );
     if (estProduction) {
       res.setHeader(
@@ -70,7 +71,9 @@ export function creerLimiteurDebit(options: OptionsLimiteurDebit) {
       req.socket?.remoteAddress ||
       'unknown';
 
-    const cle = `${ipBrute}:${req.baseUrl}${req.path}`;
+    const cle = options.clePersonnalisee
+      ? options.clePersonnalisee(req, ipBrute)
+      : `${ipBrute}:${req.baseUrl}${req.path}`;
     const existant = seaux.get(cle) ?? { horodatages: [] };
     existant.horodatages = existant.horodatages.filter(
       (t) => maintenant - t < options.fenetreMs,

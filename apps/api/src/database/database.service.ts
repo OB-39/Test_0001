@@ -38,7 +38,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         throw new Error('DATABASE_URL doit etre differente de ' + autre + ' (roles distincts)');
       }
     }
-    this.pool = new Pool({ connectionString: url });
+    const maxPool = Math.min(
+      100,
+      Math.max(10, Number(config.get<string>('DB_POOL_MAX')) || 30),
+    );
+    this.pool = new Pool({
+      connectionString: url,
+      max: maxPool,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
     this.pool.on('error', (err) => {
       this.logger.error('Erreur de connexion a la base : ' + err.message);
     });

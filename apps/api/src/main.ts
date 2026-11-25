@@ -22,20 +22,32 @@ async function bootstrap() {
 
   app.use(creerMiddlewareEntetesSecurite(estProduction));
 
-  // Protection anti-brute-force sur la connexion et la reinitialisation
+  // Protection anti-brute-force par compte+IP (evite de bloquer un amphi sur le meme Wi-Fi campus)
   const limiteurAuth = creerLimiteurDebit({
     fenetreMs: 60_000,
     maxRequetes: 20,
     message:
-      'Trop de tentatives de connexion. Veuillez réessayer dans une minute.',
+      'Trop de tentatives de connexion pour ce compte. Veuillez réessayer dans une minute.',
+    clePersonnalisee: (req, ipBrute) => {
+      const corps = req.body as Record<string, unknown> | undefined;
+      const identifiant =
+        typeof corps?.identifiant === 'string'
+          ? corps.identifiant.trim().toLowerCase().slice(0, 120)
+          : typeof corps?.email === 'string'
+            ? corps.email.trim().toLowerCase().slice(0, 120)
+            : '';
+      return identifiant
+        ? `${ipBrute}:${req.path}:${identifiant}`
+        : `${ipBrute}:${req.path}`;
+    },
   });
   app.use('/api/v1/auth/login', limiteurAuth);
   app.use('/api/v1/auth/mot-de-passe-oublie', limiteurAuth);
 
-  // Protection du scanner QR (dimensionnee pour un amphi partageant la meme IP campus)
+  // Protection du scanner QR (dimensionnee pour plusieurs milliers d'etudiants sur la meme IP campus)
   const limiteurScanQr = creerLimiteurDebit({
     fenetreMs: 60_000,
-    maxRequetes: 400,
+    maxRequetes: 3000,
     message:
       'Pic de scans détecté. Veuillez patienter quelques secondes puis rescanner.',
   });

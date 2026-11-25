@@ -81,9 +81,48 @@ interface LigneAuditSql {
   hmac_signature: string | null;
 }
 
+interface ActeurCacheEntree {
+  matricule: string | null;
+  nomComplet: string | null;
+  expiresAt: number;
+}
+
+const TTL_CACHE_ACTEUR_MS = 5 * 60_000;
+const TAILLE_MAX_CACHE_ACTEUR = 5_000;
+
 @Injectable()
 export class AuditService {
+  private readonly acteurCache = new Map<number, ActeurCacheEntree>();
+
   constructor(private readonly db: DatabaseService) {}
+
+  private lireActeurEnCache(userId: number): ActeurCacheEntree | null {
+    const entree = this.acteurCache.get(userId);
+    if (!entree) return null;
+    if (Date.now() >= entree.expiresAt) {
+      this.acteurCache.delete(userId);
+      return null;
+    }
+    return entree;
+  }
+
+  private ecrireActeurEnCache(
+    userId: number,
+    matricule: string | null,
+    nomComplet: string | null,
+  ): void {
+    if (this.acteurCache.size >= TAILLE_MAX_CACHE_ACTEUR) {
+      const premiereCle = this.acteurCache.keys().next().value;
+      if (premiereCle !== undefined) {
+        this.acteurCache.delete(premiereCle);
+      }
+    }
+    this.acteurCache.set(userId, {
+      matricule,
+      nomComplet,
+      expiresAt: Date.now() + TTL_CACHE_ACTEUR_MS,
+    });
+  }
 
   async enregistrer(entree: EntreeAudit): Promise<void> {
     await this.enregistrerDans(this.db.query.bind(this.db), entree);
@@ -103,23 +142,30 @@ export class AuditService {
     const previousHash = derniers[0]?.entry_hash ?? GENESIS_AUDIT_HASH;
     const nextIdApprox = (derniers[0]?.id ?? 0) + 1;
 
-    // Resoudre identite complete (matricule + nom complet) si userId present
+    // Resoudre identite complete (matricule + nom complet) avec cache memoire borne (5 min)
     let userMatricule: string | null = null;
     let userNomComplet: string | null = null;
     if (entree.userId !== undefined) {
-      const acteurs = await query<{
-        matricule: string | null;
-        nom: string | null;
-        prenom: string | null;
-      }>(
-        `SELECT matricule, nom, prenom FROM identity.users WHERE id = $1 LIMIT 1`,
-        [entree.userId],
-      );
-      if (acteurs[0]) {
-        userMatricule = acteurs[0].matricule;
-        userNomComplet = [acteurs[0].prenom, acteurs[0].nom]
-          .filter(Boolean)
-          .join(' ') || null;
+      const enCache = this.lireActeurEnCache(entree.userId);
+      if (enCache) {
+        userMatricule = enCache.matricule;
+        userNomComplet = enCache.nomComplet;
+      } else {
+        const acteurs = await query<{
+          matricule: string | null;
+          nom: string | null;
+          prenom: string | null;
+        }>(
+          `SELECT matricule, nom, prenom FROM identity.users WHERE id = $1 LIMIT 1`,
+          [entree.userId],
+        );
+        if (acteurs[0]) {
+          userMatricule = acteurs[0].matricule;
+          userNomComplet = [acteurs[0].prenom, acteurs[0].nom]
+            .filter(Boolean)
+            .join(' ') || null;
+          this.ecrireActeurEnCache(entree.userId, userMatricule, userNomComplet);
+        }
       }
     }
 

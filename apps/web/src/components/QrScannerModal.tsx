@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type TouchEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import jsQR from 'jsqr';
 import {
@@ -11,6 +18,8 @@ import {
   RefreshCw,
   ShieldCheck,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import type { ResultatScanPresence } from '@/api/types';
@@ -19,6 +28,15 @@ import {
   genererJetonPresenceClient,
   obtenirEmpreinteAppareil,
 } from '@/utils/qrPresenceToken';
+import {
+  calculerZoneCaptureQr,
+  calculerZoomDepuisPincement,
+  DIMENSION_MAX_ANALYSE_QR,
+  normaliserFacteurZoom,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_PAS,
+} from '@/utils/qrScannerZoom';
 
 interface QrScannerModalProps {
   ouvert: boolean;
@@ -34,6 +52,67 @@ interface SessionDemoActive {
   counter: number;
   secretKey: string;
   lastTokenTimestampMs: number;
+}
+
+interface BarcodeDetectorLike {
+  detect(source: CanvasImageSource): Promise<Array<{ rawValue?: string }>>;
+}
+
+interface BarcodeDetectorCtor {
+  new (options?: { formats?: string[] }): BarcodeDetectorLike;
+}
+
+interface CapacitesCameraEtendues extends MediaTrackCapabilities {
+  torch?: boolean;
+  zoom?: {
+    min?: number;
+    max?: number;
+    step?: number;
+  };
+}
+
+/**
+ * Classes Tailwind discretes (sans style inline) pour le zoom numerique fluide du flux video.
+ */
+const CLASSES_ZOOM_VIDEO: ReadonlyArray<{ seuil: number; classe: string }> = [
+  { seuil: 1.0, classe: 'scale-100' },
+  { seuil: 1.25, classe: 'scale-125' },
+  { seuil: 1.5, classe: 'scale-150' },
+  { seuil: 1.75, classe: 'scale-[1.75]' },
+  { seuil: 2.0, classe: 'scale-[2]' },
+  { seuil: 2.25, classe: 'scale-[2.25]' },
+  { seuil: 2.5, classe: 'scale-[2.5]' },
+  { seuil: 2.75, classe: 'scale-[2.75]' },
+  { seuil: 3.0, classe: 'scale-[3]' },
+  { seuil: 3.25, classe: 'scale-[3.25]' },
+  { seuil: 3.5, classe: 'scale-[3.5]' },
+  { seuil: 3.75, classe: 'scale-[3.75]' },
+  { seuil: 4.0, classe: 'scale-[4]' },
+];
+
+function classeZoomNumerique(facteur: number): string {
+  if (facteur <= 1.05) return 'scale-100';
+  let meilleure = CLASSES_ZOOM_VIDEO[0];
+  let ecartMin = Math.abs(facteur - meilleure.seuil);
+  for (const item of CLASSES_ZOOM_VIDEO) {
+    const ecart = Math.abs(facteur - item.seuil);
+    if (ecart < ecartMin) {
+      ecartMin = ecart;
+      meilleure = item;
+    }
+  }
+  return meilleure.classe;
+}
+
+function creerDetecteurNatifQr(): BarcodeDetectorLike | null {
+  if (typeof window === 'undefined') return null;
+  const ctor = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
+  if (typeof ctor !== 'function') return null;
+  try {
+    return new ctor({ formats: ['qr_code'] });
+  } catch {
+    return null;
+  }
 }
 
 function lireSessionDemoActive(): SessionDemoActive | null {
@@ -75,9 +154,17 @@ function lireSessionDemoActive(): SessionDemoActive | null {
   }
 }
 
+function distanceEntreDoigts(touches: TouchEvent<HTMLDivElement>['touches']): number {
+  if (touches.length < 2) return 0;
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
 /**
- * Modale PWA de scan camera pour l'emargement etudiant par QR Code dynamique (ENP).
- * Compatible iOS Safari (playsInline + muted) et Android Chrome avec torche optionnelle.
+ * Modale PWA epuree de scan camera pour l'emargement etudiant par QR Code dynamique (ENP).
+ * Zoom hybride optique + numerique ROI (curseur fluide + pincement a deux doigts)
+ * et decodage rapide (BarcodeDetector natif + repli jsQR sur ROI 480 px).
  * Attribution : Pr Adekunle Akim SALAMI, KOUDASSE Joy Amos & OHOUNSOUN Bienvenu.
  */
 export function QrScannerModal({
@@ -90,12 +177,21 @@ export function QrScannerModal({
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const verrouScanRef = useRef(false);
+  const analyseEnCoursRef = useRef(false);
+  const detecteurNatifRef = useRef<BarcodeDetectorLike | null>(null);
   const onPresenceValideeRef = useRef(onPresenceValidee);
   onPresenceValideeRef.current = onPresenceValidee;
 
-  const [etatCamera, setEtatCamera] = useState<
-    'init' | 'active' | 'indisponible'
-  >('init');
+  // Etat du zoom hybride (optique materiel + numerique ROI)
+  const [zoom, setZoom] = useState<number>(ZOOM_MIN);
+  const [zoomMax, setZoomMax] = useState<number>(ZOOM_MAX);
+  const [zoomOptiqueMax, setZoomOptiqueMax] = useState<number>(1);
+  const zoomRef = useRef<number>(ZOOM_MIN);
+  const zoomMaxRef = useRef<number>(ZOOM_MAX);
+  const zoomOptiqueMaxRef = useRef<number>(1);
+  const pincementRef = useRef<{ distance: number; zoomInitial: number } | null>(null);
+
+  const [etatCamera, setEtatCamera] = useState<'init' | 'active' | 'indisponible'>('init');
   const [messageCamera, setMessageCamera] = useState<string | null>(null);
   const [torcheSupportee, setTorcheSupportee] = useState(false);
   const [torcheActive, setTorcheActive] = useState(false);
@@ -113,6 +209,7 @@ export function QrScannerModal({
       window.cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    analyseEnCoursRef.current = false;
     if (streamRef.current) {
       for (const track of streamRef.current.getTracks()) {
         track.stop();
@@ -121,6 +218,27 @@ export function QrScannerModal({
     }
     setTorcheActive(false);
     setTorcheSupportee(false);
+    setZoomOptiqueMax(1);
+    zoomOptiqueMaxRef.current = 1;
+  }, []);
+
+  const appliquerZoom = useCallback((valeurSouhaitee: number) => {
+    const val = normaliserFacteurZoom(valeurSouhaitee, ZOOM_MIN, zoomMaxRef.current);
+    zoomRef.current = val;
+    setZoom(val);
+
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (track && zoomOptiqueMaxRef.current > 1) {
+      const optique = Math.min(val, zoomOptiqueMaxRef.current);
+      void track
+        .applyConstraints({
+          advanced: [{ zoom: optique } as MediaTrackConstraintSet],
+        })
+        .catch(() => {
+          zoomOptiqueMaxRef.current = 1;
+          setZoomOptiqueMax(1);
+        });
+    }
   }, []);
 
   const soumettreJeton = useCallback(
@@ -131,10 +249,9 @@ export function QrScannerModal({
       setTraitement(true);
       setErreurScan(null);
 
-      // Vibration haptique immediate a la detection (mobile Android / PWA)
       try {
         if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-          navigator.vibrate(200);
+          navigator.vibrate(150);
         }
       } catch {
         // Vibration non supportee sur ce navigateur
@@ -165,10 +282,16 @@ export function QrScannerModal({
   const demarrerCamera = useCallback(async () => {
     arreterCamera();
     verrouScanRef.current = false;
+    analyseEnCoursRef.current = false;
     setErreurScan(null);
     setSucces(null);
     setEtatCamera('init');
     setMessageCamera(null);
+    setAfficherSaisieManuelle(false);
+    zoomRef.current = ZOOM_MIN;
+    setZoom(ZOOM_MIN);
+    zoomMaxRef.current = ZOOM_MAX;
+    setZoomMax(ZOOM_MAX);
 
     if (
       typeof navigator === 'undefined' ||
@@ -177,9 +300,13 @@ export function QrScannerModal({
     ) {
       setEtatCamera('indisponible');
       setMessageCamera(
-        "La caméra n'est pas accessible dans ce navigateur. Utilisez un smartphone en HTTPS ou la saisie de jeton ci-dessous.",
+        "La caméra n'est pas accessible dans ce navigateur. Utilisez un smartphone en HTTPS.",
       );
       return;
+    }
+
+    if (!detecteurNatifRef.current) {
+      detecteurNatifRef.current = creerDetecteurNatifQr();
     }
 
     try {
@@ -188,25 +315,43 @@ export function QrScannerModal({
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
           audio: false,
         });
       } catch {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
       }
       streamRef.current = stream;
 
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
-        const caps = videoTrack.getCapabilities() as MediaTrackCapabilities & {
-          torch?: boolean;
-        };
+        const caps = videoTrack.getCapabilities() as CapacitesCameraEtendues;
         setTorcheSupportee(Boolean(caps.torch));
+
+        if (caps.zoom && typeof caps.zoom.max === 'number' && caps.zoom.max > 1) {
+          const maxOptique = Math.min(6, Math.max(1, caps.zoom.max));
+          zoomOptiqueMaxRef.current = maxOptique;
+          setZoomOptiqueMax(maxOptique);
+          const maxGlobal = Math.max(ZOOM_MAX, Math.min(6, Math.round(maxOptique * 10) / 10));
+          zoomMaxRef.current = maxGlobal;
+          setZoomMax(maxGlobal);
+        }
       }
 
       const video = videoRef.current;
@@ -220,38 +365,87 @@ export function QrScannerModal({
       setEtatCamera('active');
 
       let dernierTick = 0;
-      const analyser = (horodatage: number) => {
-        if (!streamRef.current || verrouScanRef.current) return;
-        if (horodatage - dernierTick >= 140) {
-          dernierTick = horodatage;
-          const v = videoRef.current;
-          const c = canvasRef.current;
-          if (v && c && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0) {
-            c.width = v.videoWidth;
-            c.height = v.videoHeight;
-            const ctx = c.getContext('2d', { willReadFrequently: true });
-            if (ctx) {
-              ctx.drawImage(v, 0, 0, c.width, c.height);
-              const imageData = ctx.getImageData(0, 0, c.width, c.height);
-              const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'attemptBoth',
-              });
-              if (code && code.data) {
-                void soumettreJeton(code.data);
+      let compteurFrame = 0;
+
+      const analyserFrame = async () => {
+        if (!streamRef.current || verrouScanRef.current || analyseEnCoursRef.current) {
+          return;
+        }
+        const v = videoRef.current;
+        const c = canvasRef.current;
+        if (!v || !c || v.readyState < 2 || v.videoWidth <= 0 || v.videoHeight <= 0) {
+          return;
+        }
+
+        analyseEnCoursRef.current = true;
+        try {
+          const facteurActuel = zoomRef.current;
+          const optiqueMax = zoomOptiqueMaxRef.current;
+          const zoomNumeriqueEffectif =
+            optiqueMax > 1
+              ? Math.max(1, facteurActuel / Math.min(facteurActuel, optiqueMax))
+              : facteurActuel;
+
+          const zone = calculerZoneCaptureQr(
+            v.videoWidth,
+            v.videoHeight,
+            zoomNumeriqueEffectif,
+            DIMENSION_MAX_ANALYSE_QR,
+          );
+
+          if (c.width !== zone.dw || c.height !== zone.dh) {
+            c.width = zone.dw;
+            c.height = zone.dh;
+          }
+
+          const ctx = c.getContext('2d', { willReadFrequently: true });
+          if (!ctx) return;
+
+          ctx.drawImage(v, zone.sx, zone.sy, zone.sw, zone.sh, 0, 0, zone.dw, zone.dh);
+
+          // 1. Chemin ultra-rapide natif (materiel)
+          const detecteur = detecteurNatifRef.current;
+          if (detecteur) {
+            try {
+              const resultats = await detecteur.detect(c);
+              const valeur = resultats.find((r) => r.rawValue && r.rawValue.trim().length > 0)?.rawValue;
+              if (valeur) {
+                void soumettreJeton(valeur);
                 return;
               }
+            } catch {
+              detecteurNatifRef.current = null;
             }
           }
+
+          // 2. Repli jsQR universel sur ROI 480 px
+          compteurFrame += 1;
+          const imageData = ctx.getImageData(0, 0, zone.dw, zone.dh);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: compteurFrame % 3 === 0 ? 'attemptBoth' : 'dontInvert',
+          });
+          if (code && code.data) {
+            void soumettreJeton(code.data);
+          }
+        } finally {
+          analyseEnCoursRef.current = false;
         }
-        rafRef.current = window.requestAnimationFrame(analyser);
       };
 
-      rafRef.current = window.requestAnimationFrame(analyser);
+      const boucle = (horodatage: number) => {
+        if (!streamRef.current || verrouScanRef.current) return;
+        if (horodatage - dernierTick >= 90 && !analyseEnCoursRef.current) {
+          dernierTick = horodatage;
+          void analyserFrame();
+        }
+        rafRef.current = window.requestAnimationFrame(boucle);
+      };
+
+      rafRef.current = window.requestAnimationFrame(boucle);
     } catch {
       setEtatCamera('indisponible');
-      setAfficherSaisieManuelle(true);
       setMessageCamera(
-        "Autorisation caméra refusée ou aucune caméra arrière détectée. Autorisez la caméra dans les réglages ou utilisez l'option de test ci-dessous.",
+        "Autorisation caméra refusée ou caméra arrière introuvable. Vérifiez les permissions du navigateur.",
       );
     }
   }, [arreterCamera, soumettreJeton]);
@@ -271,7 +465,6 @@ export function QrScannerModal({
     };
   }, [ouvert, estModeMock, demarrerCamera, arreterCamera]);
 
-  // Rafraichir l'etat de la session demo ouverte en arriere-plan (mode maquette)
   useEffect(() => {
     if (!ouvert || !estModeMock) return;
     const timer = window.setInterval(() => {
@@ -294,6 +487,35 @@ export function QrScannerModal({
     }
   }
 
+  function handleTouchStartViseur(event: TouchEvent<HTMLDivElement>) {
+    if (event.touches.length === 2) {
+      pincementRef.current = {
+        distance: distanceEntreDoigts(event.touches),
+        zoomInitial: zoomRef.current,
+      };
+    }
+  }
+
+  function handleTouchMoveViseur(event: TouchEvent<HTMLDivElement>) {
+    if (event.touches.length === 2 && pincementRef.current) {
+      const distanceCourante = distanceEntreDoigts(event.touches);
+      const nouveauZoom = calculerZoomDepuisPincement(
+        pincementRef.current.distance,
+        distanceCourante,
+        pincementRef.current.zoomInitial,
+        ZOOM_MIN,
+        zoomMaxRef.current,
+      );
+      appliquerZoom(nouveauZoom);
+    }
+  }
+
+  function handleTouchEndViseur(event: TouchEvent<HTMLDivElement>) {
+    if (event.touches.length < 2) {
+      pincementRef.current = null;
+    }
+  }
+
   function rescanner() {
     verrouScanRef.current = false;
     setErreurScan(null);
@@ -312,7 +534,7 @@ export function QrScannerModal({
     const active = lireSessionDemoActive();
     if (!active || !active.token) {
       setErreurScan(
-        "Aucune projection d'émargement ouverte détectée dans ce navigateur. Ouvrez une projection en tant qu'enseignant dans un autre onglet.",
+        "Aucune projection d'émargement ouverte détectée dans ce navigateur.",
       );
       return;
     }
@@ -332,25 +554,28 @@ export function QrScannerModal({
 
   if (!ouvert) return null;
 
+  const zoomNumeriqueVisuel =
+    zoomOptiqueMax > 1 ? Math.max(1, zoom / Math.min(zoom, zoomOptiqueMax)) : zoom;
+
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] bg-[#071A33] flex flex-col justify-between p-4 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-[#061529] flex flex-col justify-between px-4 py-3.5 sm:p-6 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="titre-scanner-presence"
     >
-      {/* EN-TETE MODALE */}
-      <div className="w-full max-w-lg mx-auto flex items-center justify-between gap-3 pb-3 border-b border-white/15">
-        <div className="flex items-center gap-2.5 text-white">
+      {/* EN-TETE EPURE */}
+      <div className="w-full max-w-md mx-auto flex items-center justify-between gap-3 pb-3 border-b border-white/10">
+        <div className="flex items-center gap-2.5 text-white min-w-0">
           <div className="w-9 h-9 bg-[#1A5FB4] flex items-center justify-center shrink-0">
             <QrCode className="w-5 h-5" />
           </div>
-          <div>
-            <h2 id="titre-scanner-presence" className="text-base font-extrabold">
-              Scanner ma présence en direct
+          <div className="min-w-0">
+            <h2 id="titre-scanner-presence" className="text-sm sm:text-base font-bold truncate">
+              Scanner ma présence
             </h2>
-            <p className="text-xs text-sky-200">
-              Visez le QR Code projeté par l'enseignant
+            <p className="text-[11px] sm:text-xs text-sky-200/85 truncate">
+              Cadrez le QR Code projeté par l'enseignant
             </p>
           </div>
         </div>
@@ -361,36 +586,36 @@ export function QrScannerModal({
             onFermer();
           }}
           aria-label="Fermer le scanner de présence"
-          className="p-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+          className="w-10 h-10 bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-colors flex items-center justify-center shrink-0"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* CONTENU CENTRAL */}
-      <div className="w-full max-w-lg mx-auto my-auto py-5 space-y-4">
+      {/* CONTENU CENTRAL ERGONOMIQUE */}
+      <div className="w-full max-w-md mx-auto my-auto py-4 space-y-4">
         {succes ? (
-          /* ECRAN DE SUCCES VERT FRANC */
+          /* ECRAN DE SUCCES */
           <div
             data-testid="scan-success-panel"
-            className="bg-[#15803D] text-white border-2 border-emerald-300 p-6 sm:p-8 text-center space-y-5 shadow-2xl"
+            className="bg-[#15803D] text-white border border-emerald-300/70 p-6 text-center space-y-5 shadow-2xl"
           >
-            <div className="w-16 h-16 bg-white text-[#15803D] mx-auto flex items-center justify-center">
-              <CheckCircle2 className="w-10 h-10" />
+            <div className="w-14 h-14 bg-white text-[#15803D] mx-auto flex items-center justify-center">
+              <CheckCircle2 className="w-9 h-9" />
             </div>
 
-            <div className="space-y-1.5">
-              <span className="text-xs font-extrabold uppercase tracking-widest text-emerald-100">
-                Reçu d'émargement horodaté
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-100">
+                Présence enregistrée
               </span>
-              <h3 className="text-xl sm:text-2xl font-extrabold leading-snug">
+              <h3 className="text-lg sm:text-xl font-extrabold leading-snug">
                 {succes.message}
               </h3>
             </div>
 
-            <div className="bg-[#0F5E2D] border border-emerald-400/40 p-4 text-left text-xs sm:text-sm space-y-2">
+            <div className="bg-[#0F5E2D] border border-emerald-400/35 p-3.5 text-left text-xs space-y-2">
               <div className="flex justify-between gap-3">
-                <span className="text-emerald-100 shrink-0">Unité d'enseignement</span>
+                <span className="text-emerald-100 shrink-0">UE</span>
                 <span className="font-bold text-white text-right">
                   {succes.codeUe} : {succes.intituleUe}
                 </span>
@@ -402,18 +627,9 @@ export function QrScannerModal({
                 </span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-emerald-100 shrink-0">Date et heure exacte</span>
+                <span className="text-emerald-100 shrink-0">Horodatage</span>
                 <span className="font-mono font-bold text-white text-right">
                   {succes.dateSeance} à {formaterHeureExacte(succes.scanneA)}
-                </span>
-              </div>
-              <div className="flex justify-between gap-2 pt-2 border-t border-emerald-400/30">
-                <span className="text-emerald-100 flex items-center gap-1">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Sécurité</span>
-                </span>
-                <span className="font-semibold text-emerald-100">
-                  Jeton HMAC vérifié
                 </span>
               </div>
             </div>
@@ -421,9 +637,9 @@ export function QrScannerModal({
             <button
               type="button"
               onClick={onFermer}
-              className="w-full py-3.5 px-5 bg-white text-[#15803D] hover:bg-emerald-50 font-extrabold text-sm uppercase tracking-wider transition-colors min-h-[48px]"
+              className="w-full py-3 px-5 bg-white text-[#15803D] hover:bg-emerald-50 font-extrabold text-xs uppercase tracking-wider transition-colors min-h-[46px]"
             >
-              Retour à mon relevé d'assiduité
+              Retour à mes présences
             </button>
           </div>
         ) : (
@@ -432,39 +648,39 @@ export function QrScannerModal({
             {erreurScan && (
               <div
                 data-testid="scan-error-alert"
-                className="bg-[#B91C1C] text-white border border-red-300/60 p-4 space-y-3"
+                className="bg-[#B91C1C] text-white border border-red-300/50 p-3.5 space-y-2.5"
                 role="alert"
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-2.5">
                   <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-200" />
-                  <div className="space-y-1">
-                    <p className="text-xs font-extrabold uppercase tracking-wider text-red-100">
-                      Émargement non validé
-                    </p>
-                    <p className="text-sm font-bold leading-snug">{erreurScan}</p>
-                  </div>
+                  <p className="text-xs sm:text-sm font-semibold leading-snug">{erreurScan}</p>
                 </div>
                 <button
                   type="button"
                   onClick={rescanner}
-                  className="w-full py-2.5 bg-white text-[#B91C1C] font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 min-h-[44px]"
+                  className="w-full py-2 bg-white text-[#B91C1C] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 min-h-[40px]"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Rescanner l'écran du professeur</span>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Réessayer le scan</span>
                 </button>
               </div>
             )}
 
-            {/* VISEUR CAMERA INTEGRE */}
-            <div className="relative bg-black border-2 border-white/25 overflow-hidden aspect-square w-full max-w-[380px] mx-auto flex items-center justify-center">
+            {/* VISEUR CAMERA EPURE + PINCEMENT POUR ZOOMER */}
+            <div
+              onTouchStart={handleTouchStartViseur}
+              onTouchMove={handleTouchMoveViseur}
+              onTouchEnd={handleTouchEndViseur}
+              className="relative bg-black border border-white/20 overflow-hidden aspect-square w-full max-w-[360px] mx-auto flex items-center justify-center touch-none select-none shadow-2xl"
+            >
               <video
                 ref={videoRef}
                 playsInline
                 muted
                 autoPlay
-                className={`w-full h-full object-cover ${
-                  etatCamera === 'active' ? 'opacity-100' : 'opacity-0'
-                }`}
+                className={`w-full h-full object-cover transition-transform duration-100 ease-out origin-center ${classeZoomNumerique(
+                  zoomNumeriqueVisuel,
+                )} ${etatCamera === 'active' ? 'opacity-100' : 'opacity-0'}`}
               />
               <canvas ref={canvasRef} className="hidden" />
 
@@ -472,31 +688,28 @@ export function QrScannerModal({
                 <>
                   {/* CADRE DE VISEE CARRE + LIGNE DE BALAYAGE */}
                   <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-[72%] h-[72%] relative border border-white/30">
-                      <span className="absolute -top-1 -left-1 w-7 h-7 border-t-4 border-l-4 border-[#B08D35]" />
-                      <span className="absolute -top-1 -right-1 w-7 h-7 border-t-4 border-r-4 border-[#B08D35]" />
-                      <span className="absolute -bottom-1 -left-1 w-7 h-7 border-b-4 border-l-4 border-[#B08D35]" />
-                      <span className="absolute -bottom-1 -right-1 w-7 h-7 border-b-4 border-r-4 border-[#B08D35]" />
-                      <div className="enp-scan-line absolute left-1 right-1 h-0.5 bg-emerald-400 shadow-[0_0_10px_#34D399]" />
+                    <div className="w-[70%] h-[70%] relative">
+                      <span className="absolute top-0 left-0 w-7 h-7 border-t-[3px] border-l-[3px] border-[#E8C97A]" />
+                      <span className="absolute top-0 right-0 w-7 h-7 border-t-[3px] border-r-[3px] border-[#E8C97A]" />
+                      <span className="absolute bottom-0 left-0 w-7 h-7 border-b-[3px] border-l-[3px] border-[#E8C97A]" />
+                      <span className="absolute bottom-0 right-0 w-7 h-7 border-b-[3px] border-r-[3px] border-[#E8C97A]" />
+                      <div className="enp-scan-line absolute left-2 right-2 h-0.5 bg-emerald-400 shadow-[0_0_10px_#34D399]" />
                     </div>
                   </div>
 
-                  {/* BOUTON TORCHE / FLASH SI SUPPORTE */}
+                  {/* BOUTON TORCHE FLOTTANT SI SUPPORTE */}
                   {torcheSupportee && (
                     <button
                       type="button"
                       onClick={() => void basculerTorche()}
-                      aria-label={
-                        torcheActive ? 'Éteindre la torche' : 'Allumer la torche'
-                      }
-                      className={`absolute bottom-3 right-3 px-3 py-2 text-xs font-bold flex items-center gap-1.5 border transition-colors min-h-[44px] ${
+                      aria-label={torcheActive ? 'Éteindre la torche' : 'Allumer la torche'}
+                      className={`absolute bottom-3 right-3 w-11 h-11 flex items-center justify-center border transition-colors ${
                         torcheActive
-                          ? 'bg-[#B08D35] text-[#071A33] border-[#B08D35]'
-                          : 'bg-[#071A33]/85 text-white border-white/30 hover:bg-[#0B2545]'
+                          ? 'bg-[#B08D35] text-[#061529] border-[#B08D35]'
+                          : 'bg-[#061529]/80 text-white border-white/25 hover:bg-[#0B2545]'
                       }`}
                     >
                       <Flashlight className="w-4 h-4" />
-                      <span>{torcheActive ? 'Torche active' : 'Torche'}</span>
                     </button>
                   )}
                 </>
@@ -504,73 +717,117 @@ export function QrScannerModal({
 
               {etatCamera === 'init' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center">
-                  <Camera className="w-9 h-9 text-[#B08D35] animate-pulse" />
-                  <p className="text-sm font-semibold">
-                    Activation de la caméra arrière...
+                  <Camera className="w-8 h-8 text-[#E8C97A] animate-pulse" />
+                  <p className="text-sm font-medium text-sky-100">
+                    Ouverture de la caméra...
                   </p>
                 </div>
               )}
 
               {etatCamera === 'indisponible' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-slate-200 p-6 text-center bg-[#0B2545]">
-                  <Camera className="w-10 h-10 text-[#B08D35]" />
-                  <p className="text-sm font-bold text-white">
-                    Caméra non disponible sur cet appareil
-                  </p>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {messageCamera}
-                  </p>
+                  <Camera className="w-9 h-9 text-[#E8C97A]" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-white">
+                      Caméra indisponible
+                    </p>
+                    <p className="text-xs text-slate-300 leading-relaxed max-w-[260px]">
+                      {messageCamera}
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => void demarrerCamera()}
-                    className="mt-1 px-4 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/25 text-xs font-bold flex items-center gap-1.5 min-h-[40px]"
+                    className="mt-1 px-4 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/20 text-xs font-semibold flex items-center gap-1.5 min-h-[40px]"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Réessayer la caméra</span>
+                    <span>Réessayer</span>
                   </button>
                 </div>
               )}
 
               {traitement && (
-                <div className="absolute inset-0 bg-[#071A33]/80 flex flex-col items-center justify-center gap-2 text-white">
+                <div className="absolute inset-0 bg-[#061529]/85 flex flex-col items-center justify-center gap-2.5 text-white">
                   <RefreshCw className="w-7 h-7 animate-spin text-emerald-400" />
-                  <span className="text-sm font-bold">
-                    Vérification cryptographique en cours...
-                  </span>
+                  <span className="text-sm font-semibold">Validation en cours...</span>
                 </div>
               )}
             </div>
 
-            {/* AIDE AU TEST INTER-ONGLETS EN MODE MAQUETTE + SAISIE MANUELLE */}
-            <div className="bg-white/10 border border-white/15 p-4 space-y-3 text-white">
-              {estModeMock && sessionDemo && (
-                <div className="bg-emerald-500/15 border border-emerald-400/40 p-3 space-y-2">
-                  <p className="text-xs font-bold text-emerald-200">
-                    Projection active détectée (mode démo) : {sessionDemo.codeUe} ({sessionDemo.libelleSeance})
-                  </p>
-                  <button
-                    type="button"
-                    data-testid="demo-scan-active-btn"
-                    disabled={traitement}
-                    onClick={simulerScanDemoActif}
-                    className="w-full py-2.5 px-4 bg-[#15803D] hover:bg-[#166534] text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors min-h-[44px]"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    <span>Valider le QR Code projeté en direct (démo)</span>
-                  </button>
-                </div>
-              )}
+            {/* CURSEUR DE ZOOM EPURE (SANS TEXTE NI BOUTONS DE COTES) */}
+            <div
+              data-testid="qr-zoom-controls"
+              className="w-full max-w-[360px] mx-auto bg-white/[0.07] border border-white/15 px-3 py-2.5 flex items-center gap-2.5 text-white"
+            >
+              <button
+                type="button"
+                onClick={() => appliquerZoom(zoom - ZOOM_PAS)}
+                disabled={zoom <= ZOOM_MIN}
+                aria-label="Dézoomer la caméra"
+                className="w-9 h-9 bg-white/10 hover:bg-white/20 disabled:opacity-35 flex items-center justify-center shrink-0 transition-colors"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+
+              <input
+                type="range"
+                min={ZOOM_MIN}
+                max={zoomMax}
+                step={ZOOM_PAS}
+                value={zoom}
+                onChange={(event) => appliquerZoom(Number(event.target.value))}
+                aria-label="Curseur de zoom de la caméra"
+                className="flex-1 accent-[#B08D35] h-2 cursor-pointer"
+              />
 
               <button
                 type="button"
-                onClick={() => setAfficherSaisieManuelle((v) => !v)}
-                className="w-full flex items-center justify-between text-xs font-semibold text-sky-200 hover:text-white py-1"
+                onClick={() => appliquerZoom(zoom + ZOOM_PAS)}
+                disabled={zoom >= zoomMax}
+                aria-label="Zoomer la caméra"
+                className="w-9 h-9 bg-white/10 hover:bg-white/20 disabled:opacity-35 flex items-center justify-center shrink-0 transition-colors"
               >
-                <span className="flex items-center gap-1.5">
-                  <Keyboard className="w-4 h-4" />
-                  <span>Saisir ou coller un jeton QR manuellement</span>
+                <ZoomIn className="w-4 h-4" />
+              </button>
+
+              <span
+                data-testid="qr-zoom-value"
+                className="w-10 text-right text-xs font-mono font-bold text-[#E8C97A] tabular-nums shrink-0"
+              >
+                {zoom.toFixed(1)}×
+              </span>
+            </div>
+
+            {/* ACTION DEMO SI SESSION ACTIVE EN MODE MAQUETTE */}
+            {estModeMock && sessionDemo && (
+              <div className="w-full max-w-[360px] mx-auto bg-emerald-500/15 border border-emerald-400/40 p-3 space-y-2 text-white">
+                <p className="text-xs font-semibold text-emerald-200 truncate">
+                  Projection démo active : {sessionDemo.codeUe}
+                </p>
+                <button
+                  type="button"
+                  data-testid="demo-scan-active-btn"
+                  disabled={traitement}
+                  onClick={simulerScanDemoActif}
+                  className="w-full py-2.5 px-4 bg-[#15803D] hover:bg-[#166534] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors min-h-[42px]"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>Valider le QR Code projeté (démo)</span>
+                </button>
+              </div>
+            )}
+
+            {/* OPTION DISCRETE DE SAISIE MANUELLE */}
+            <div className="w-full max-w-[360px] mx-auto text-center space-y-2.5">
+              <button
+                type="button"
+                onClick={() => setAfficherSaisieManuelle((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-200/80 hover:text-white py-1 transition-colors"
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+                <span>
+                  {afficherSaisieManuelle ? 'Masquer la saisie manuelle' : 'Saisir un jeton manuellement'}
                 </span>
-                <span>{afficherSaisieManuelle ? 'Masquer' : 'Afficher'}</span>
               </button>
 
               {afficherSaisieManuelle && (
@@ -581,12 +838,12 @@ export function QrScannerModal({
                     onChange={(event) => setJetonManuel(event.target.value)}
                     placeholder="ENP-PRESENCE:v1...."
                     aria-label="Jeton QR de présence"
-                    className="flex-1 bg-white text-[#0B2545] px-3 py-2 text-xs font-mono border border-slate-300 focus:outline-none focus:border-[#B08D35] min-h-[44px]"
+                    className="flex-1 bg-white text-[#0B2545] px-3 py-2 text-xs font-mono border border-slate-300 focus:outline-none focus:border-[#B08D35] min-h-[42px]"
                   />
                   <button
                     type="submit"
                     disabled={traitement || !jetonManuel.trim()}
-                    className="px-4 py-2 bg-[#B08D35] hover:bg-[#997828] disabled:opacity-50 text-[#071A33] font-extrabold text-xs uppercase tracking-wider min-h-[44px]"
+                    className="px-4 py-2 bg-[#B08D35] hover:bg-[#997828] disabled:opacity-50 text-[#061529] font-extrabold text-xs uppercase tracking-wider min-h-[42px]"
                   >
                     Valider
                   </button>
@@ -597,12 +854,10 @@ export function QrScannerModal({
         )}
       </div>
 
-      {/* PIED SECURITE */}
-      <div className="w-full max-w-lg mx-auto pt-3 border-t border-white/15 flex items-center justify-center gap-2 text-[11px] text-slate-300 text-center">
-        <ShieldCheck className="w-4 h-4 text-[#B08D35] shrink-0" />
-        <span>
-          Jeton valable 8 secondes maximum · Empreinte d'appareil unique par séance
-        </span>
+      {/* PIED SECURITE DISCRET */}
+      <div className="w-full max-w-md mx-auto pt-2.5 border-t border-white/10 flex items-center justify-center gap-1.5 text-[11px] text-slate-300/85 text-center">
+        <ShieldCheck className="w-3.5 h-3.5 text-[#E8C97A] shrink-0" />
+        <span>Jeton sécurisé · Appareil unique par séance</span>
       </div>
     </div>,
     document.body,

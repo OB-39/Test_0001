@@ -58,8 +58,9 @@ describe('QrPresenceService', () => {
     const query = jest
       .fn()
       .mockResolvedValueOnce([sessionOuverteRow])
-      .mockResolvedValueOnce([{ ok: 1 }])
-      .mockResolvedValueOnce([{ id: 77 }]);
+      .mockResolvedValueOnce([
+        { inscrit: true, deja_scan: true, appareil_utilise: false },
+      ]);
 
     const service = creerService(query);
 
@@ -73,14 +74,30 @@ describe('QrPresenceService', () => {
     const query = jest
       .fn()
       .mockResolvedValueOnce([sessionOuverteRow])
-      .mockResolvedValueOnce([{ ok: 1 }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ etudiant_id: 1001 }]);
+      .mockResolvedValueOnce([
+        { inscrit: true, deja_scan: false, appareil_utilise: true },
+      ]);
 
     const service = creerService(query);
 
     await expect(
       service.scannerPresence(1002, token, 'device-fp-partage-123456'),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('bloque un etudiant non inscrit a l UE', async () => {
+    const token = genererJetonPresence(10, 2, COMBINED_SECRET, Date.now()).token;
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([sessionOuverteRow])
+      .mockResolvedValueOnce([
+        { inscrit: false, deja_scan: false, appareil_utilise: false },
+      ]);
+
+    const service = creerService(query);
+
+    await expect(
+      service.scannerPresence(1099, token, 'device-fp-non-inscrit-123'),
     ).rejects.toThrow(ForbiddenException);
   });
 
